@@ -26,7 +26,7 @@ const content = {
     startNow: 'ابدأ الآن',
     explore: 'استكشف الفرص',
     help: 'مركز الدعم والمساعدة',
-    terms: 'الشروط والأحكام',
+    terms: 'الشرو,ط والأحكام',
     privacy: 'سياسة الخصوصية',
     howItWorksTitle: 'كيف يعمل النظام',
     howItWorksDescription: 'ثلاث خطوات بسيطة للبدء',
