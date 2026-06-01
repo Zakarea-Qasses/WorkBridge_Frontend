@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import {
   Bell,
-  Bookmark,
   Briefcase,
   Building2,
   CheckCircle2,
@@ -133,7 +132,6 @@ export default function DashboardLayout({
       },
       { icon: Briefcase, label: isEnglish ? 'Jobs' : 'الوظائف', path: '/jobs' },
       { icon: CheckCircle2, label: isEnglish ? 'My Applications' : 'طلباتي', path: '/applied-jobs' },
-      { icon: Bookmark, label: isEnglish ? 'Saved Items' : 'المحفوظات', path: '/saved-jobs' },
       { icon: Wallet, label: isEnglish ? 'Wallet' : 'المحفظة', path: '/wallet' },
       { icon: MessageSquare, label: isEnglish ? 'Messages' : 'المحادثات', path: '/messages' },
       { icon: Bell, label: isEnglish ? 'Notifications' : 'الإشعارات', path: '/notifications' },
@@ -169,7 +167,6 @@ export default function DashboardLayout({
       { icon: FileText, label: isEnglish ? 'Content Management' : 'إدارة المحتوى', path: '/admin/projects' },
       { icon: Wallet, label: isEnglish ? 'Finance Management' : 'الإدارة المالية', path: '/admin/finance' },
       { icon: Wallet, label: isEnglish ? 'Site Wallet' : 'محفظة الموقع', path: '/admin/site-wallet' },
-      { icon: CircleHelp, label: isEnglish ? 'Support Center' : 'مركز الدعم', path: '/admin/support' },
       { icon: MessageSquare, label: isEnglish ? 'Admin Messages' : 'محادثات الأدمن', path: '/admin/messages' },
       { icon: Bell, label: isEnglish ? 'Notifications' : 'الإشعارات', path: '/admin/notifications' },
       { icon: Settings, label: isEnglish ? 'Settings' : 'الإعدادات', path: '/admin/settings' },
@@ -293,15 +290,12 @@ export default function DashboardLayout({
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="gap-2">
-                    <div className="flex size-8 items-center justify-center rounded-full bg-primary/10">
-                      {userType === 'company' ? (
-                        <Building2 className="size-5 text-primary" />
-                      ) : (
-                        <User className="size-5 text-primary" />
-                      )}
-                    </div>
-                    <span className="hidden md:inline">{accountName}</span>
+                  <Button variant="ghost" size="icon">
+                    {userType === 'company' ? (
+                      <Building2 className="size-5 text-primary" />
+                    ) : (
+                      <User className="size-5 text-primary" />
+                    )}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-56">
@@ -354,6 +348,10 @@ export default function DashboardLayout({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              <Button asChild variant="link" className="hidden px-0 text-foreground md:inline-flex">
+                <Link to={profileLink}>{accountName}</Link>
+              </Button>
             </div>
           </div>
         </header>

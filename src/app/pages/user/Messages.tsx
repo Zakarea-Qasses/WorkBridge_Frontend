@@ -14,11 +14,9 @@ import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { Badge, Button, Card, Input, ScrollArea } from '@/app/components/ui';
 import {
-  getHiddenConversationIds,
   getMessagingData,
   reportConversationMessage,
   sendConversationMessage,
-  setHiddenConversationIds as persistHiddenConversationIds,
 } from '@/app/storage';
 
 const REPORT_REASON = 'Inappropriate or abusive content';
@@ -91,12 +89,8 @@ export function MessagesPage({
   const [isChatOpenOnMobile, setIsChatOpenOnMobile] = useState(false);
   const [hasAcceptedPolicy, setHasAcceptedPolicy] = useState(false);
   const [mutedConversationIds, setMutedConversationIds] = useState<number[]>([]);
-  const [hiddenConversationIds, setHiddenConversationIdsState] = useState<number[]>([]);
   const [isConversationMenuOpen, setIsConversationMenuOpen] = useState(false);
   const [messagingData, setMessagingData] = useState(getMessagingData());
-
-  const hiddenPageLink =
-    userType === 'company' ? '/company/messages/hidden' : '/messages/hidden';
 
   const moderationPageLink = '/admin/reports';
   const viewerProfileState =
@@ -107,7 +101,6 @@ export function MessagesPage({
         : { viewerType: 'user' as const, returnTo: '/messages' };
 
   const text = {
-    hiddenConversations: isEnglish ? 'Hidden conversations' : 'المحادثات المخفية',
     consentTitle: isEnglish ? 'Consent to use messaging' : 'الموافقة على استخدام المحادثات',
     consentBody: isEnglish
       ? 'By using messaging, you agree that communication is for professional work only, and messages may be reviewed when there is a report, dispute, or legal obligation.'
@@ -116,7 +109,7 @@ export function MessagesPage({
     adminNoticeTitle: isEnglish ? 'Admin view notice' : 'تنبيه واجهة الأدمن',
     adminNoticeBody: isEnglish
       ? 'This view is intended for administrative follow-up only. The admin reviews and monitors conversations here without acting as a regular participant.'
-      : 'هذه الواجهة مخصصة لمتابعة محادثات المنصة عند الحاجة الإدارية فقط. الأدمن هنا يراجع ويتابع، ولا يستخدم منطق الإبلاغ أو إخفاء المحادثة كطرف عادي داخل الحوار.',
+      : 'هذه الواجهة مخصصة لمتابعة محادثات المنصة عند الحاجة الإدارية فقط. الأدمن هنا يراجع ويتابع، ولا يستخدم منطق الإبلاغ كطرف عادي داخل الحوار.',
     privacyNoticeTitle: isEnglish
       ? 'Privacy and review notice'
       : 'تنبيه الخصوصية والمراجعة',
@@ -146,17 +139,12 @@ export function MessagesPage({
       isEnglish
         ? `The current conversation with ${name} is linked to ${project}.`
         : `المحادثة الحالية مع ${name} مرتبطة بـ ${project}.`,
-    conversationHidden: (name: string) =>
-      isEnglish
-        ? `${name}'s conversation was hidden from the list.`
-        : `تم إخفاء محادثة ${name} من القائمة.`,
     searchPlaceholder: isEnglish ? 'Search by person name...' : 'ابحث باسم الشخص...',
     noSearchResults: isEnglish ? 'No matching results were found.' : 'لا توجد نتيجة مطابقة لهذا الاسم.',
     conversationOptions: isEnglish ? 'Conversation options' : 'خيارات المحادثة',
     showDetails: isEnglish ? 'Show conversation details' : 'عرض تفاصيل المحادثة',
     unmuteNotifications: isEnglish ? 'Unmute notifications' : 'إلغاء كتم الإشعارات',
     muteNotifications: isEnglish ? 'Mute notifications' : 'كتم الإشعارات',
-    hideConversation: isEnglish ? 'Hide conversation from list' : 'إخفاء المحادثة من القائمة',
     reportConversation: isEnglish ? 'Report conversation' : 'الإبلاغ عن المحادثة',
     reported: isEnglish ? 'Reported' : 'تم الإبلاغ',
     report: isEnglish ? 'Report' : 'إبلاغ',
@@ -168,7 +156,7 @@ export function MessagesPage({
     reportCenterEnd: isEnglish ? 'page.' : 'الخاصة بالأدمن.',
     adminMessageHint: isEnglish
       ? 'This conversation is visible to the admin for follow-up and review only, not for using report or conversation-management actions as a regular participant.'
-      : 'هذه المحادثة ظاهرة للأدمن بغرض المتابعة والمراجعة فقط، وليس لاستخدام أزرار الإبلاغ أو إدارة المحادثة كطرف عادي.',
+      : 'هذه المحادثة ظاهرة للأدمن بغرض المتابعة والمراجعة فقط، وليس لاستخدام أزرار الإبلاغ كطرف عادي.',
     sensitiveDataHint: isEnglish
       ? 'Do not share sensitive information in the conversation unless necessary.'
       : 'لا تشارك بيانات حساسة داخل المحادثة إلا عند الحاجة.',
@@ -179,24 +167,19 @@ export function MessagesPage({
   useEffect(() => {
     setMessagingData(getMessagingData());
     setHasAcceptedPolicy(hasAcceptedMessagesPolicy(userType));
-    setHiddenConversationIdsState(getHiddenConversationIds());
   }, [userType]);
 
   const filteredConversations = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
     if (!normalizedSearch) {
-      return messagingData.conversations.filter(
-        (conversation) => !hiddenConversationIds.includes(conversation.id),
-      );
+      return messagingData.conversations;
     }
 
     return messagingData.conversations.filter(
-      (conversation) =>
-        !hiddenConversationIds.includes(conversation.id) &&
-        conversation.name.toLowerCase().includes(normalizedSearch),
+      (conversation) => conversation.name.toLowerCase().includes(normalizedSearch),
     );
-  }, [hiddenConversationIds, messagingData.conversations, searchTerm]);
+  }, [messagingData.conversations, searchTerm]);
 
   const activeConversation =
     messagingData.conversations.find((conversation) => conversation.id === selectedChat) ??
@@ -299,40 +282,9 @@ export function MessagesPage({
     setStatusMessage(text.conversationDetails(activeConversation.name, activeConversation.project));
   };
 
-  const handleHideConversation = () => {
-    if (!activeConversation || isAdminView) {
-      return;
-    }
-
-    setIsConversationMenuOpen(false);
-    const nextHiddenIds = [...hiddenConversationIds, activeConversation.id];
-    setHiddenConversationIdsState(nextHiddenIds);
-    persistHiddenConversationIds(nextHiddenIds);
-
-    const nextVisibleConversation = messagingData.conversations.find(
-      (conversation) =>
-        conversation.id !== activeConversation.id && !nextHiddenIds.includes(conversation.id),
-    );
-
-    if (nextVisibleConversation) {
-      setSelectedChat(nextVisibleConversation.id);
-      setIsChatOpenOnMobile(false);
-    }
-
-    setStatusMessage(text.conversationHidden(activeConversation.name));
-  };
-
   return (
     <DashboardLayout userType={userType}>
       <div className="space-y-4" dir={language === 'en' ? 'ltr' : 'rtl'}>
-        {!isAdminView && (
-          <div className="flex justify-end">
-            <Button asChild variant="outline">
-              <Link to={hiddenPageLink}>{text.hiddenConversations}</Link>
-            </Button>
-          </div>
-        )}
-
         {!isAdminView && !hasAcceptedPolicy && (
           <Card className="border-blue-200 bg-blue-50 p-4">
             <div className="space-y-4">
@@ -542,15 +494,6 @@ export function MessagesPage({
                                   mutedConversationIds.includes(activeConversation.id)
                                     ? text.unmuteNotifications
                                     : text.muteNotifications}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={handleHideConversation}
-                                  className={`w-full rounded-sm px-2 py-2 text-sm hover:bg-accent ${
-                                    language === 'en' ? 'text-left' : 'text-right'
-                                  }`}
-                                >
-                                  {text.hideConversation}
                                 </button>
                                 <button
                                   type="button"

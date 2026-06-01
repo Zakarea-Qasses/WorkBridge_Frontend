@@ -1,8 +1,10 @@
+import { forwardRef } from 'react';
 import { cn } from './utils';
 
-function Input({ className, type, ...props }: React.ComponentProps<"input">) {
-  return (
+const Input = forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
+  ({ className, type, ...props }, ref) => (
     <input
+      ref={ref}
       type={type}
       data-slot="input"
       className={cn(
@@ -13,8 +15,10 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
       )}
       {...props}
     />
-  );
-}
+  ),
+);
+
+Input.displayName = 'Input';
 
 export { Input };
 

@@ -7,7 +7,7 @@ These files mainly wrap `localStorage` and keep feature state grouped by domain.
 ## Files
 
 - `walletStorage.ts`: wallet balances, transactions, escrow-like flows, and related helpers
-- `messagesStorage.ts`: conversations, hidden chats, reports, and moderation-related chat state
+- `messagesStorage.ts`: conversations, reports, and moderation-related chat state
 - `servicesStorage.ts`: service records and service lifecycle updates
 - `serviceRequestStorage.ts`: service request records and request state changes
 - `supportStorage.ts`: support tickets, complaints, and support workflows

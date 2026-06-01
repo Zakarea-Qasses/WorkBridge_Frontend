@@ -11,11 +11,6 @@ import {
   CardTitle,
   Input,
   Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Textarea,
 } from '@/app/components/ui';
 import {
@@ -100,7 +95,6 @@ export default function SupportCenter() {
   const [tickets, setTickets] = useState(getSupportTickets());
   const [form, setForm] = useState({
     subject: '',
-    category: 'Support' as SupportTicket['category'],
     description: '',
   });
   const [attachments, setAttachments] = useState<SupportAttachment[]>([]);
@@ -142,29 +136,12 @@ export default function SupportCenter() {
     setTickets(
       createSupportTicket({
         ...form,
+        category: 'Support',
         attachments,
       }),
     );
-    setForm({ subject: '', category: 'Support', description: '' });
+    setForm({ subject: '', description: '' });
     setAttachments([]);
-
-    if (form.category === 'Dispute') {
-      setFeedback(
-        isEnglish
-          ? 'The dispute was opened and sent with attachments to the support center.'
-          : 'تم فتح النزاع وإرسال الطلب مع المرفقات إلى مركز الدعم.',
-      );
-      return;
-    }
-
-    if (form.category === 'Complaint') {
-      setFeedback(
-        isEnglish
-          ? 'The complaint was sent with attachments to the support center.'
-          : 'تم إرسال الشكوى مع المرفقات إلى مركز الدعم.',
-      );
-      return;
-    }
 
     setFeedback(
       isEnglish
@@ -228,25 +205,6 @@ export default function SupportCenter() {
                     value={form.subject}
                     onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))}
                   />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>{isEnglish ? 'Ticket Type' : 'نوع التذكرة'}</Label>
-                  <Select
-                    value={form.category}
-                    onValueChange={(value: SupportTicket['category']) =>
-                      setForm((current) => ({ ...current, category: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Support">{isEnglish ? 'Support' : 'دعم'}</SelectItem>
-                      <SelectItem value="Complaint">{isEnglish ? 'Complaint' : 'شكوى'}</SelectItem>
-                      <SelectItem value="Dispute">{isEnglish ? 'Dispute' : 'نزاع'}</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
 
                 <div className="space-y-2">

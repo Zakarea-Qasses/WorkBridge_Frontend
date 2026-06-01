@@ -197,32 +197,6 @@ export default function Dashboard() {
               </Button>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>{isEnglish ? 'Monthly Statistics' : 'الإحصائيات الشهرية'}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  {isEnglish ? 'Completed projects' : 'مشاريع مكتملة'}
-                </span>
-                <span className="font-bold">6</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">{isEnglish ? 'Revenue' : 'الإيرادات'}</span>
-                <span className="font-bold text-green-600">$24,500</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">{isEnglish ? 'Submitted offers' : 'عروض مرسلة'}</span>
-                <span className="font-bold">18</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">{isEnglish ? 'Acceptance rate' : 'معدل القبول'}</span>
-                <span className="font-bold text-primary">65%</span>
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
         <PostCompletionReviewsSection />

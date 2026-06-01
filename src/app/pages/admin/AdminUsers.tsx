@@ -12,10 +12,21 @@ import {
 } from '@/app/components/ui';
 import { adminUsers, getDisplayStatusLabel, getStatusClasses } from '@/app/data';
 
+type AdminUser = (typeof adminUsers)[number];
+type AdminUserStatus = AdminUser['status'];
+type PendingAction = {
+  id: number;
+  userName: string;
+  nextStatus: AdminUserStatus;
+  message: string;
+  action: 'approve' | 'ban';
+} | null;
+
 export default function AdminUsers() {
   const { language, isEnglish } = useLanguage();
   const pendingSeed = useMemo(() => adminUsers.filter((user) => user.status === 'معلق'), []);
   const [users, setUsers] = useState(pendingSeed);
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [feedback, setFeedback] = useState(
     isEnglish
       ? 'Pending accounts appear here, and after a decision they move directly to the reviewed section.'
@@ -30,6 +41,34 @@ export default function AdminUsers() {
       current.map((user) => (user.id === id ? { ...user, status: nextStatus } : user)),
     );
     setFeedback(message);
+  };
+
+  const requestAction = (
+    user: AdminUser,
+    nextStatus: AdminUserStatus,
+    action: 'approve' | 'ban',
+    message: string,
+  ) => {
+    setPendingAction({
+      id: user.id,
+      userName: user.name,
+      nextStatus,
+      action,
+      message,
+    });
+  };
+
+  const confirmAction = () => {
+    if (!pendingAction) {
+      return;
+    }
+
+    handleAction(
+      pendingAction.id,
+      pendingAction.nextStatus as Parameters<typeof handleAction>[1],
+      pendingAction.message,
+    );
+    setPendingAction(null);
   };
 
   return (
@@ -92,9 +131,10 @@ export default function AdminUsers() {
                     <Button
                       size="sm"
                       onClick={() =>
-                        handleAction(
-                          user.id,
+                        requestAction(
+                          user,
                           'نشط',
+                          'approve',
                           isEnglish
                             ? `${user.name}'s account was approved and moved to reviewed.`
                             : `تم قبول الحساب ${user.name} ونقله إلى تمت المراجعة.`,
@@ -107,9 +147,10 @@ export default function AdminUsers() {
                       variant="destructive"
                       size="sm"
                       onClick={() =>
-                        handleAction(
-                          user.id,
+                        requestAction(
+                          user,
                           'محظور',
+                          'ban',
                           isEnglish
                             ? `${user.name}'s account was banned and moved to reviewed.`
                             : `تم حظر الحساب ${user.name} ونقله إلى تمت المراجعة.`,
@@ -166,6 +207,36 @@ export default function AdminUsers() {
             </CardContent>
           </Card>
         </div>
+
+        {pendingAction ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4">
+            <Card className="w-full max-w-md shadow-2xl">
+              <CardHeader>
+                <CardTitle>
+                  {isEnglish
+                    ? `Confirm ${pendingAction.action === 'approve' ? 'approval' : 'ban'}`
+                    : `تأكيد ${pendingAction.action === 'approve' ? 'القبول' : 'الحظر'}`}
+                </CardTitle>
+                <CardDescription>
+                  {isEnglish
+                    ? `Are you sure you want to ${pendingAction.action === 'approve' ? 'approve' : 'ban'} ${pendingAction.userName}? This action will move the account to reviewed.`
+                    : `هل أنت متأكد أنك تريد ${pendingAction.action === 'approve' ? 'قبول' : 'حظر'} حساب ${pendingAction.userName}؟ بعد التأكيد سينتقل الحساب إلى قسم تمت المراجعة.`}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap justify-end gap-3">
+                <Button variant="outline" onClick={() => setPendingAction(null)}>
+                  {isEnglish ? 'Cancel' : 'تراجع'}
+                </Button>
+                <Button
+                  variant={pendingAction.action === 'ban' ? 'destructive' : 'default'}
+                  onClick={confirmAction}
+                >
+                  {isEnglish ? 'Confirm' : 'تأكيد'}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
       </div>
     </DashboardLayout>
   );

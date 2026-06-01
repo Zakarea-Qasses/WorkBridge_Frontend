@@ -16,10 +16,8 @@ const Wallet = lazyPage(() => import('@/app/pages/user/Wallet'));
 const TopUpWallet = lazyPage(() => import('@/app/pages/user/TopUpWallet'));
 const WithdrawWallet = lazyPage(() => import('@/app/pages/user/WithdrawWallet'));
 const Messages = lazyPage(() => import('@/app/pages/user/Messages'));
-const HiddenConversations = lazyPage(() => import('@/app/pages/user/HiddenConversations'));
 const Notifications = lazyPage(() => import('@/app/pages/user/Notifications'));
 const AppliedJobs = lazyPage(() => import('@/app/pages/user/AppliedJobs'));
-const SavedJobs = lazyPage(() => import('@/app/pages/user/SavedJobs'));
 const Profile = lazyPage(() => import('@/app/pages/user/Profile'));
 const PublicProfile = lazyPage(() => import('@/app/pages/public/PublicProfile'));
 const Settings = lazyPage(() => import('@/app/pages/user/Settings'));
@@ -42,10 +40,8 @@ export const userRoutes = [
   { path: '/wallet/top-up', Component: TopUpWallet },
   { path: '/wallet/withdraw', Component: WithdrawWallet },
   { path: '/messages', Component: Messages },
-  { path: '/messages/hidden', Component: HiddenConversations },
   { path: '/notifications', Component: Notifications },
   { path: '/applied-jobs', Component: AppliedJobs },
-  { path: '/saved-jobs', Component: SavedJobs },
   { path: '/profile/:id', Component: Profile },
   { path: '/freelancers/:id', Component: PublicProfile },
   { path: '/settings', Component: Settings },

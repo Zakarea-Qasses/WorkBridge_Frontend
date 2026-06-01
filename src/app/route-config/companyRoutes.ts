@@ -12,9 +12,6 @@ const CompanyWithdrawWallet = lazyPage(
   () => import('@/app/pages/company/CompanyWithdrawWallet'),
 );
 const CompanyMessages = lazyPage(() => import('@/app/pages/company/CompanyMessages'));
-const CompanyHiddenConversations = lazyPage(
-  () => import('@/app/pages/company/CompanyHiddenConversations'),
-);
 const CompanyNotifications = lazyPage(() => import('@/app/pages/company/CompanyNotifications'));
 const CompanySettings = lazyPage(() => import('@/app/pages/company/CompanySettings'));
 
@@ -29,7 +26,6 @@ export const companyRoutes = [
   { path: '/company/wallet/top-up', Component: CompanyTopUpWallet },
   { path: '/company/wallet/withdraw', Component: CompanyWithdrawWallet },
   { path: '/company/messages', Component: CompanyMessages },
-  { path: '/company/messages/hidden', Component: CompanyHiddenConversations },
   { path: '/company/notifications', Component: CompanyNotifications },
   { path: '/company/settings', Component: CompanySettings },
 ];

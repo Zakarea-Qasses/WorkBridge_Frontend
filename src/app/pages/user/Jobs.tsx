@@ -30,9 +30,7 @@ import { jobs } from '@/app/data';
 import {
   createContentReport,
   getAppliedJobIds,
-  getSavedJobIds,
   setAppliedJobIds as persistAppliedJobIds,
-  setSavedJobIds as persistSavedJobIds,
 } from '@/app/storage';
 
 const JOBS_PER_PAGE = 3;
@@ -58,12 +56,10 @@ export default function Jobs() {
   const [selectedType, setSelectedType] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [appliedJobIds, setAppliedJobIds] = useState<number[]>([]);
-  const [savedJobIds, setSavedJobIds] = useState<number[]>([]);
   const [statusMessage, setStatusMessage] = useState('');
 
   useEffect(() => {
     setAppliedJobIds(getAppliedJobIds());
-    setSavedJobIds(getSavedJobIds());
   }, []);
 
   const filteredJobs = useMemo(
@@ -113,25 +109,6 @@ export default function Jobs() {
           : isEnglish
             ? 'Your application was submitted successfully. You can track it from My Applications.'
             : 'تم التقدم على الوظيفة بنجاح ويمكنك متابعتها من صفحة طلباتي.',
-      );
-      return nextIds;
-    });
-  };
-
-  const handleSave = (jobId: number) => {
-    setSavedJobIds((current) => {
-      const nextIds = current.includes(jobId)
-        ? current.filter((id) => id !== jobId)
-        : [...current, jobId];
-      persistSavedJobIds(nextIds);
-      setStatusMessage(
-        current.includes(jobId)
-          ? isEnglish
-            ? 'The job was removed from saved jobs.'
-            : 'تمت إزالة الوظيفة من المحفوظات.'
-          : isEnglish
-            ? 'The job was saved for later.'
-            : 'تم حفظ الوظيفة للرجوع إليها لاحقًا.',
       );
       return nextIds;
     });
@@ -189,14 +166,11 @@ export default function Jobs() {
             <h1 className="text-3xl font-bold">{isEnglish ? 'Available Jobs' : 'الوظائف المتاحة'}</h1>
             <p className="mt-1 text-muted-foreground">
               {isEnglish
-                ? 'Browse jobs that suit you, apply to them, or save them for later.'
-                : 'تصفح الوظائف المناسبة لك وقدّم عليها أو احفظها للرجوع إليها لاحقًا.'}
+                ? 'Browse jobs that suit you and apply to the right opportunities.'
+                : 'تصفح الوظائف المناسبة لك وقدّم على الفرص المناسبة.'}
             </p>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
-            <Button asChild variant="outline">
-              <Link to="/saved-jobs">{isEnglish ? 'Saved jobs' : 'الوظائف المحفوظة'}</Link>
-            </Button>
             <Button asChild variant="outline">
               <Link to="/applied-jobs">{isEnglish ? 'Applied jobs' : 'الوظائف التي قدمت عليها'}</Link>
             </Button>
@@ -267,7 +241,6 @@ export default function Jobs() {
           {paginatedJobs.length > 0 ? (
             paginatedJobs.map((job) => {
               const isApplied = appliedJobIds.includes(job.id);
-              const isSaved = savedJobIds.includes(job.id);
 
               return (
                 <Card key={job.id} className="transition-shadow hover:shadow-lg">
@@ -330,9 +303,6 @@ export default function Jobs() {
                           : isEnglish
                             ? 'Apply for the job'
                             : 'التقدم إلى الوظيفة'}
-                      </Button>
-                      <Button variant={isSaved ? 'default' : 'outline'} onClick={() => handleSave(job.id)}>
-                        {isSaved ? (isEnglish ? 'Saved' : 'تم الحفظ') : isEnglish ? 'Save' : 'حفظ'}
                       </Button>
                       <Button variant="outline" onClick={() => handleReportJob(job.title)}>
                         {isEnglish ? 'Report post' : 'إبلاغ عن المنشور'}

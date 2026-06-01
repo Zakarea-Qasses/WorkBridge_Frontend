@@ -12,7 +12,13 @@ import {
   CardTitle,
 } from '@/app/components/ui';
 import { getDisplayStatusLabel, getDisplayTypeLabel, getStatusClasses } from '@/app/data';
-import { AdminProjectRecord, getAdminProjectRecords, processAdminProject } from '@/app/storage';
+import {
+  AdminProjectRecord,
+  deleteAdminProject,
+  getAdminProjectRecords,
+  processAdminProject,
+  resetAdminProjectRecords,
+} from '@/app/storage';
 
 type ProcessedAdminProject = AdminProjectRecord & {
   processedAt: string;
@@ -124,6 +130,32 @@ export default function AdminProjects() {
     );
   };
 
+  const handleDeletePost = (item: AdminProjectRecord) => {
+    const nextItems = deleteAdminProject(item.id);
+    const nextOpenItems = nextItems.filter((currentItem) => !currentItem.processedAt);
+
+    setItems(nextItems);
+    setSelectedItemId(nextOpenItems[0]?.id ?? 0);
+    setFeedback(
+      isEnglish
+        ? `"${item.title}" was deleted from content management.`
+        : `تم حذف المنشور "${item.title}" من إدارة المحتوى.`,
+    );
+  };
+
+  const handleShowExamples = () => {
+    const nextItems = resetAdminProjectRecords();
+    const nextOpenItems = nextItems.filter((currentItem) => !currentItem.processedAt);
+
+    setItems(nextItems);
+    setSelectedItemId(nextOpenItems[0]?.id ?? 0);
+    setFeedback(
+      isEnglish
+        ? 'Example content items were added so you can test the delete post button.'
+        : 'تمت إضافة أمثلة محتوى حتى تستطيع تجربة زر حذف منشور.',
+    );
+  };
+
   return (
     <DashboardLayout userType="admin">
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
@@ -164,10 +196,18 @@ export default function AdminProjects() {
             </CardHeader>
             <CardContent className="space-y-4">
               {openItems.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                <div className="space-y-4 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
                   {isEnglish
                     ? 'There are no open items right now. Any new items will appear here automatically.'
                     : 'لا توجد عناصر مفتوحة حاليًا. ستظهر أي عناصر جديدة هنا تلقائيًا.'}
+                </div>
+              ) : null}
+
+              {openItems.length === 0 ? (
+                <div className="flex justify-center">
+                  <Button type="button" variant="outline" onClick={handleShowExamples}>
+                    {isEnglish ? 'Show examples' : 'إظهار أمثلة'}
+                  </Button>
                 </div>
               ) : null}
 
@@ -237,6 +277,14 @@ export default function AdminProjects() {
                     >
                       {isEnglish ? 'View details' : 'عرض التفاصيل'}
                     </Button>
+
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDeletePost(item)}
+                    >
+                      {isEnglish ? 'Delete post' : 'حذف منشور'}
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -289,6 +337,14 @@ export default function AdminProjects() {
                       ? 'Viewing details does not remove the item. The actual action only happens when you press approve or close.'
                       : 'عرض التفاصيل لا يزيل العنصر. الإجراء الفعلي يحصل فقط عند الضغط على زر الاعتماد أو الإغلاق.'}
                   </div>
+
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    onClick={() => handleDeletePost(selectedItem)}
+                  >
+                    {isEnglish ? 'Delete post' : 'حذف منشور'}
+                  </Button>
                 </div>
               ) : (
                 <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">

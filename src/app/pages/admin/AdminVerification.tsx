@@ -144,12 +144,6 @@ export default function AdminVerification() {
                         </p>
                         <p className="font-medium">{company.email}</p>
                       </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">
-                          {isEnglish ? 'Team size' : 'عدد الموظفين'}
-                        </p>
-                        <p className="font-medium">{company.employees}</p>
-                      </div>
                       <div className="flex flex-wrap gap-2 pt-2">
                         <Button
                           className="min-w-[8rem] flex-1"
@@ -246,12 +240,6 @@ export default function AdminVerification() {
                           {isEnglish ? 'Email address' : 'البريد الإلكتروني'}
                         </p>
                         <p className="font-medium">{company.email}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">
-                          {isEnglish ? 'Team size' : 'عدد الموظفين'}
-                        </p>
-                        <p className="font-medium">{company.employees}</p>
                       </div>
                     </CardContent>
                   </Card>

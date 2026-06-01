@@ -35,7 +35,6 @@ interface MessagingData {
 }
 
 const MESSAGES_STORAGE_KEY = 'workbridge-messages';
-const HIDDEN_CONVERSATIONS_STORAGE_KEY = 'workbridge-hidden-conversations';
 
 const defaultMessagingData: MessagingData = {
   conversations: [
@@ -151,32 +150,6 @@ function persist(data: MessagingData) {
   }
 
   window.localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(data));
-}
-
-function readNumberIds(key: string) {
-  if (!canUseStorage()) {
-    return [] as number[];
-  }
-
-  const raw = window.localStorage.getItem(key);
-  if (!raw) {
-    return [] as number[];
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'number') : [];
-  } catch {
-    return [] as number[];
-  }
-}
-
-function writeNumberIds(key: string, ids: number[]) {
-  if (!canUseStorage()) {
-    return;
-  }
-
-  window.localStorage.setItem(key, JSON.stringify(ids));
 }
 
 function nowParts() {
@@ -355,10 +328,3 @@ export function updateReportedMessageStatus(
   return nextData;
 }
 
-export function getHiddenConversationIds() {
-  return readNumberIds(HIDDEN_CONVERSATIONS_STORAGE_KEY);
-}
-
-export function setHiddenConversationIds(ids: number[]) {
-  writeNumberIds(HIDDEN_CONVERSATIONS_STORAGE_KEY, ids);
-}

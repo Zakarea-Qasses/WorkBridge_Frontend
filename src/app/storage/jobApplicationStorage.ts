@@ -1,5 +1,4 @@
 const APPLIED_JOBS_STORAGE_KEY = 'workbridge-applied-jobs';
-const SAVED_JOBS_STORAGE_KEY = 'workbridge-saved-jobs';
 
 function canUseStorage() {
   return typeof window !== 'undefined';
@@ -44,15 +43,4 @@ export function removeAppliedJobId(jobId: number) {
   setAppliedJobIds(nextIds);
   return nextIds;
 }
-
-export function getSavedJobIds() {
-  return readIds(SAVED_JOBS_STORAGE_KEY);
-}
-
-export function setSavedJobIds(ids: number[]) {
-  writeIds(SAVED_JOBS_STORAGE_KEY, ids);
-}
-
-
-
 

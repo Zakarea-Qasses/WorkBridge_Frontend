@@ -66,6 +66,19 @@ export function processAdminProject(itemId: number, actionLabel: string) {
   return next;
 }
 
+export function deleteAdminProject(itemId: number) {
+  const current = getAdminProjectRecords();
+  const next = current.filter((item) => item.id !== itemId);
+
+  writeStorage(ADMIN_PROJECTS_STORAGE_KEY, next);
+  return next;
+}
+
+export function resetAdminProjectRecords() {
+  writeStorage(ADMIN_PROJECTS_STORAGE_KEY, adminProjects);
+  return adminProjects;
+}
+
 export function getAdminDisputeRecords() {
   return readStorage<AdminDisputeRecord[]>(ADMIN_DISPUTES_STORAGE_KEY, disputes);
 }

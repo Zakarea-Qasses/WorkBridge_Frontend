@@ -142,7 +142,6 @@ export default function AdminSiteWallet() {
               const due = isReleaseDue(escrow.releaseOn);
               const canRelease = escrow.status === 'reserved' && due;
               const canRefund = escrow.status === 'reserved' || escrow.status === 'disputed';
-              const canResolveToProvider = escrow.status === 'disputed';
 
               return (
                 <div key={escrow.id} className="space-y-4 rounded-2xl border border-border p-4">
@@ -219,17 +218,6 @@ export default function AdminSiteWallet() {
                     >
                       {getIssueStatusText(escrow.status, isEnglish)}
                     </div>
-
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        const result = releaseEscrowToProvider(escrow.id, { force: true });
-                        handleRefresh(result.message);
-                      }}
-                      disabled={!canResolveToProvider}
-                    >
-                      {isEnglish ? 'Approve for provider' : 'اعتماد لمقدم الخدمة'}
-                    </Button>
 
                     <Button
                       variant="destructive"

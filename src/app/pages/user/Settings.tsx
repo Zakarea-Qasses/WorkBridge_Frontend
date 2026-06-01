@@ -8,7 +8,6 @@ function createStorageKeys(userType: 'user' | 'company' | 'admin') {
   return {
     profile: `workbridge-${userType}-profile-settings`,
     skills: `workbridge-${userType}-profile-skills`,
-    account: `workbridge-${userType}-account-settings`,
     password: `workbridge-${userType}-account-password`,
   };
 }
@@ -24,9 +23,6 @@ function getDefaults(userType: 'user' | 'company' | 'admin') {
         phone: '+963 11 123 4567',
       },
       skills: 'التوظيف, إدارة الموارد البشرية, المنتجات الرقمية',
-      account: {
-        email: 'company@workbridge.io',
-      },
     };
   }
 
@@ -40,9 +36,6 @@ function getDefaults(userType: 'user' | 'company' | 'admin') {
         phone: '+000 000 000',
       },
       skills: 'إدارة, مراجعة, دعم, تقارير',
-      account: {
-        email: 'admin@workbridge.io',
-      },
     };
   }
 
@@ -55,9 +48,6 @@ function getDefaults(userType: 'user' | 'company' | 'admin') {
       phone: '+966 50 123 4567',
     },
     skills: 'React, Node.js, TypeScript, MongoDB',
-    account: {
-      email: 'ahmed@example.com',
-    },
   };
 }
 
@@ -86,7 +76,6 @@ export function SettingsPage({ userType = 'user' }: { userType?: 'user' | 'compa
 
   const [profileSettings, setProfileSettings] = useState(defaults.profile);
   const [skills, setSkills] = useState(defaults.skills);
-  const [accountSettings, setAccountSettings] = useState(defaults.account);
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
@@ -94,15 +83,13 @@ export function SettingsPage({ userType = 'user' }: { userType?: 'user' | 'compa
   });
   const [profileMessage, setProfileMessage] = useState('');
   const [skillsMessage, setSkillsMessage] = useState('');
-  const [accountMessage, setAccountMessage] = useState('');
   const [passwordMessage, setPasswordMessage] = useState('');
   const [deleteMessage, setDeleteMessage] = useState('');
 
   useEffect(() => {
     setProfileSettings(readStorageValue(keys.profile, defaults.profile));
     setSkills(readStorageValue(keys.skills, defaults.skills));
-    setAccountSettings(readStorageValue(keys.account, defaults.account));
-  }, [defaults.account, defaults.profile, defaults.skills, keys.account, keys.profile, keys.skills]);
+  }, [defaults.profile, defaults.skills, keys.profile, keys.skills]);
 
   const handleSaveProfileChanges = () => {
     if (typeof window === 'undefined') {
@@ -120,15 +107,6 @@ export function SettingsPage({ userType = 'user' }: { userType?: 'user' | 'compa
 
     window.localStorage.setItem(keys.skills, JSON.stringify(skills));
     setSkillsMessage(isEnglish ? 'Skills updated successfully.' : 'تم تحديث المهارات بنجاح.');
-  };
-
-  const handleSaveAccountChanges = () => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    window.localStorage.setItem(keys.account, JSON.stringify(accountSettings));
-    setAccountMessage(isEnglish ? 'Account information saved successfully.' : 'تم حفظ معلومات الحساب بنجاح.');
   };
 
   const handleUpdatePassword = () => {
@@ -167,7 +145,6 @@ export function SettingsPage({ userType = 'user' }: { userType?: 'user' | 'compa
 
     window.localStorage.removeItem(keys.profile);
     window.localStorage.removeItem(keys.skills);
-    window.localStorage.removeItem(keys.account);
     window.localStorage.removeItem(keys.password);
     setDeleteMessage(isEnglish ? 'Local data for this account was removed from the interface.' : 'تم حذف بيانات هذا الحساب المحلي من الواجهة.');
     navigate('/login');
@@ -281,27 +258,6 @@ export function SettingsPage({ userType = 'user' }: { userType?: 'user' | 'compa
           </TabsContent>
 
           <TabsContent value="account" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{isEnglish ? 'Account Information' : 'معلومات الحساب'}</CardTitle>
-                <CardDescription>{isEnglish ? 'Basic independent data for this role.' : 'بيانات أساسية مستقلة لهذا الدور.'}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">{isEnglish ? 'Email' : 'البريد الإلكتروني'}</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={accountSettings.email}
-                    onChange={(event) => setAccountSettings((current) => ({ ...current, email: event.target.value }))}
-                    className="bg-input-background"
-                  />
-                </div>
-                {accountMessage ? <p className="text-sm text-green-600">{accountMessage}</p> : null}
-                <Button onClick={handleSaveAccountChanges}>{isEnglish ? 'Save Changes' : 'حفظ التغييرات'}</Button>
-              </CardContent>
-            </Card>
-
             <Card>
               <CardHeader>
                 <CardTitle>{isEnglish ? 'Change Password' : 'تغيير كلمة المرور'}</CardTitle>
