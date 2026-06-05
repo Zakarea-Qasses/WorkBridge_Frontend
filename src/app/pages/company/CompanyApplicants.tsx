@@ -15,10 +15,17 @@ import {
 import { getDisplayStatusLabel, getStatusClasses } from '@/app/data';
 import { getCompanyApplicants, setCompanyApplicants } from '@/app/storage';
 
+type CompanyApplicantItem = ReturnType<typeof getCompanyApplicants>[number];
+type LastDecision = {
+  applicant: CompanyApplicantItem;
+  action: 'accepted' | 'rejected';
+};
+
 export default function CompanyApplicants() {
   const { language, isEnglish } = useLanguage();
   const navigate = useNavigate();
   const [items, setItems] = useState(() => getCompanyApplicants());
+  const [lastDecision, setLastDecision] = useState<LastDecision | null>(null);
   const [feedback, setFeedback] = useState(
     isEnglish
       ? 'You can accept or reject an applicant, or open a conversation with them.'
@@ -46,6 +53,24 @@ export default function CompanyApplicants() {
       setCompanyApplicants(nextItems);
       return nextItems;
     });
+  };
+
+  const undoLastDecision = () => {
+    if (!lastDecision) {
+      return;
+    }
+
+    updateApplicants((current) =>
+      current.map((applicant) =>
+        applicant.id === lastDecision.applicant.id ? lastDecision.applicant : applicant,
+      ),
+    );
+    setFeedback(
+      isEnglish
+        ? `The decision for ${lastDecision.applicant.name} was undone.`
+        : `تم التراجع عن القرار الخاص بـ ${lastDecision.applicant.name}.`,
+    );
+    setLastDecision(null);
   };
 
   return (
@@ -114,7 +139,14 @@ export default function CompanyApplicants() {
         </section>
 
         <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="pt-6 text-sm text-primary">{feedback}</CardContent>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6 text-sm text-primary">
+            <span>{feedback}</span>
+            {lastDecision ? (
+              <Button variant="outline" size="sm" onClick={undoLastDecision}>
+                {isEnglish ? 'Undo decision' : 'التراجع عن القرار'}
+              </Button>
+            ) : null}
+          </CardContent>
         </Card>
 
         <Card>
@@ -172,6 +204,7 @@ export default function CompanyApplicants() {
                   <Button
                     size="sm"
                     onClick={() => {
+                      setLastDecision({ applicant, action: 'accepted' });
                       updateApplicants((current) =>
                         current.map((currentApplicant) =>
                           currentApplicant.id === applicant.id
@@ -209,6 +242,7 @@ export default function CompanyApplicants() {
                     variant="destructive"
                     size="sm"
                     onClick={() => {
+                      setLastDecision({ applicant, action: 'rejected' });
                       updateApplicants((current) =>
                         current.map((currentApplicant) =>
                           currentApplicant.id === applicant.id

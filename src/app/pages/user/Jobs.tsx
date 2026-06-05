@@ -28,6 +28,7 @@ import {
 } from '@/app/components/ui';
 import { jobs } from '@/app/data';
 import {
+  addCompanyApplicant,
   createContentReport,
   getAppliedJobIds,
   setAppliedJobIds as persistAppliedJobIds,
@@ -98,9 +99,25 @@ export default function Jobs() {
   }, [currentPage, totalPages]);
 
   const handleApply = (jobId: number) => {
+    const job = jobs.find((currentJob) => currentJob.id === jobId);
+
     setAppliedJobIds((current) => {
       const nextIds = current.includes(jobId) ? current : [...current, jobId];
       persistAppliedJobIds(nextIds);
+
+      if (!current.includes(jobId) && job) {
+        addCompanyApplicant({
+          id: Date.now(),
+          name: 'Ahmad Mohammad',
+          role: 'Freelancer',
+          matchScore: '90%',
+          appliedFor: job.title,
+          stage: 'Awaiting company review',
+          status: 'قيد المراجعة',
+          experience: '3 years',
+        });
+      }
+
       setStatusMessage(
         current.includes(jobId)
           ? isEnglish

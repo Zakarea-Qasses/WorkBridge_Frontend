@@ -34,3 +34,19 @@ export function setCompanyApplicants(items: CompanyApplicant[]) {
   window.localStorage.setItem(COMPANY_APPLICANTS_STORAGE_KEY, JSON.stringify(items));
 }
 
+export function addCompanyApplicant(item: CompanyApplicant) {
+  const current = getCompanyApplicants();
+  const alreadyExists = current.some(
+    (applicant) =>
+      applicant.name === item.name && applicant.appliedFor === item.appliedFor,
+  );
+
+  if (alreadyExists) {
+    return current;
+  }
+
+  const nextItems = [item, ...current];
+  setCompanyApplicants(nextItems);
+  return nextItems;
+}
+

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import {
   MessageSquare,
+  Send,
   Search,
   ShieldAlert,
   Sparkles,
@@ -24,7 +25,9 @@ import {
   SelectValue,
 } from '@/app/components/ui';
 import { getCategorySearchTerms, getDisplayCategoryLabel, getDisplayDurationLabel } from '@/app/data';
-import { createContentReport, getServices } from '@/app/storage';
+import { createContentReport, createServiceRequest, getServices } from '@/app/storage';
+
+type CompanyServiceItem = ReturnType<typeof getServices>[number];
 
 export default function CompanyServices() {
   const { language, isEnglish } = useLanguage();
@@ -72,6 +75,30 @@ export default function CompanyServices() {
       isEnglish
         ? `The report for "${serviceTitle}" was sent successfully.`
         : `تم إرسال البلاغ على الخدمة "${serviceTitle}" بنجاح.`,
+    );
+  };
+
+  const handleRequestService = (service: CompanyServiceItem) => {
+    createServiceRequest({
+      serviceId: service.id,
+      serviceTitle: service.title,
+      provider: service.provider,
+      providerId: service.providerId,
+      client: 'Work Bridge Labs',
+      clientId: 101,
+      price: service.price,
+      requestTitle: isEnglish ? `Request for ${service.title}` : `طلب خدمة: ${service.title}`,
+      details: isEnglish
+        ? 'The company wants to request this service and coordinate the details with the provider.'
+        : 'ترغب الشركة بطلب هذه الخدمة والتنسيق على التفاصيل مع مقدم الخدمة.',
+      references: '',
+      deadline: service.delivery,
+    });
+
+    setStatusMessage(
+      isEnglish
+        ? `The service request for "${service.title}" was sent successfully.`
+        : `تم إرسال طلب الخدمة "${service.title}" بنجاح.`,
     );
   };
 
@@ -222,6 +249,11 @@ export default function CompanyServices() {
                     <Button variant="outline" onClick={() => navigate('/company/messages')}>
                       <MessageSquare className="ml-2 size-4" />
                       {isEnglish ? 'Message provider' : 'مراسلة مقدم الخدمة'}
+                    </Button>
+
+                    <Button onClick={() => handleRequestService(service)}>
+                      <Send className="ml-2 size-4" />
+                      {isEnglish ? 'Request service' : 'طلب خدمة'}
                     </Button>
 
                     <Button variant="outline" onClick={() => handleReportService(service.title)}>

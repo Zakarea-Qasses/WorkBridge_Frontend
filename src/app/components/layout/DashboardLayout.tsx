@@ -218,10 +218,10 @@ export default function DashboardLayout({
         } fixed right-0 top-0 z-40 flex h-screen w-64 flex-col border-l border-border bg-white transition-transform duration-300 ease-in-out lg:sticky lg:translate-x-0`}
       >
         <div className="border-b border-border p-6">
-          <Link to="/" className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <Briefcase className="size-8 text-primary" />
             <span className="text-xl font-bold text-primary">Work Bridge</span>
-          </Link>
+          </div>
         </div>
 
         <nav className="flex-1 space-y-2 overflow-y-auto p-4">

@@ -37,15 +37,15 @@ export default function CompanyDashboard() {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-4 md:grid-cols-3">
           {companyStats.map((stat) => (
-            <Card key={stat.title} className={`border ${getToneClasses(stat.tone)}`}>
-              <CardHeader className="pb-3">
-                <CardDescription className="text-current/80">{stat.title}</CardDescription>
-                <CardTitle className="text-3xl">{stat.value}</CardTitle>
+            <Card key={stat.title} className={`border ${getToneClasses(stat.tone)} shadow-sm`}>
+              <CardHeader className="min-h-28 pb-3">
+                <CardDescription className="text-base text-current/80">{stat.title}</CardDescription>
+                <CardTitle className="mt-2 text-4xl">{stat.value}</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-current/80">{stat.change}</p>
+                <p className="text-sm font-medium text-current/80">{stat.change}</p>
               </CardContent>
             </Card>
           ))}

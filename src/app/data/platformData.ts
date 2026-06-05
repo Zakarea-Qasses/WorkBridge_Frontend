@@ -51,12 +51,6 @@ export const companyStats = [
     tone: 'emerald',
   },
   {
-    title: 'Scheduled interviews',
-    value: '6',
-    change: '3 this week',
-    tone: 'amber',
-  },
-  {
     title: 'Acceptance rate',
     value: '32%',
     change: '+4% this month',
