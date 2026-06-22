@@ -1,4 +1,3 @@
-import { Link } from 'react-router';
 import { KeyRound } from 'lucide-react';
 import {
   Button,
@@ -10,7 +9,7 @@ import {
   Input,
   Label,
 } from '@/app/components/ui';
-import { LanguageToggle } from '@/app/components/shared';
+import { FreshAuthLink, LanguageToggle } from '@/app/components/shared';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 
 export default function ForgotPassword() {
@@ -54,9 +53,9 @@ export default function ForgotPassword() {
             </Button>
           </form>
           <div className="mt-6 text-center">
-            <Link to="/login" className="text-sm text-primary hover:underline">
+            <FreshAuthLink mode="login" className="text-sm text-primary hover:underline">
               {isEnglish ? 'Back to Login' : 'العودة إلى تسجيل الدخول'}
-            </Link>
+            </FreshAuthLink>
           </div>
         </CardContent>
       </Card>

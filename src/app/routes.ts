@@ -3,6 +3,14 @@ import type { RouteObject } from 'react-router';
 import { createBrowserRouter } from 'react-router';
 import { NotFound, RouteError } from '@/app/pages/public';
 import { adminRoutes, authRoutes, companyRoutes, userRoutes } from '@/app/route-config';
+import { GuestRoute, ProtectedRoute } from '@/app/route-config/ProtectedRoute';
+import {
+  AccountBlocked,
+  AccountPending,
+  AccountUnderReview,
+  CompanyPendingVerification,
+} from '@/app/pages/public/AccountStatus';
+import type { WorkBridgeUser } from '@/app/api/endpoints';
 
 function withErrorElement(routes: RouteObject[]) {
   return routes.map((route) => ({
@@ -11,10 +19,58 @@ function withErrorElement(routes: RouteObject[]) {
   }));
 }
 
+function protect(routes: RouteObject[], roles?: WorkBridgeUser['role'][]) {
+  return routes.map((route) => ({
+    ...route,
+    element: createElement(
+      ProtectedRoute,
+      { roles },
+      route.element || (route.Component ? createElement(route.Component) : null),
+    ),
+    Component: undefined,
+  }));
+}
+
+function guestOnly(routes: RouteObject[]) {
+  return routes.map((route) => {
+    if (!['/login', '/register'].includes(String(route.path))) {
+      return route;
+    }
+
+    return {
+      ...route,
+      element: createElement(
+        GuestRoute,
+        null,
+        route.element || (route.Component ? createElement(route.Component) : null),
+      ),
+      Component: undefined,
+    };
+  });
+}
+
 export const router = createBrowserRouter([
-  ...withErrorElement(authRoutes),
-  ...withErrorElement(userRoutes),
-  ...withErrorElement(companyRoutes),
-  ...withErrorElement(adminRoutes),
+  ...withErrorElement(guestOnly(authRoutes)),
+  ...withErrorElement([
+    {
+      path: '/account-pending',
+      element: createElement(AccountPending),
+    },
+    {
+      path: '/account-under-review',
+      element: createElement(AccountUnderReview),
+    },
+    {
+      path: '/account-blocked',
+      element: createElement(AccountBlocked),
+    },
+    {
+      path: '/company-pending-verification',
+      element: createElement(CompanyPendingVerification),
+    },
+  ]),
+  ...withErrorElement(protect(userRoutes, ['personal'])),
+  ...withErrorElement(protect(companyRoutes, ['company'])),
+  ...withErrorElement(protect(adminRoutes, ['admin'])),
   { path: '*', Component: NotFound, errorElement: createElement(RouteError) },
 ]);

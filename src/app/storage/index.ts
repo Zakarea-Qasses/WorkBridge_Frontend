@@ -6,7 +6,5 @@ export * from './messagesStorage';
 export * from './projectsStorage';
 export * from './reportsStorage';
 export * from './reviewsStorage';
-export * from './serviceRequestStorage';
-export * from './servicesStorage';
 export * from './supportStorage';
 export * from './walletStorage';

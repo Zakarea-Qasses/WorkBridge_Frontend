@@ -1,62 +1,73 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea } from '@/app/components/ui';
-import { createService } from '@/app/storage';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Textarea,
+} from '@/app/components/ui';
+import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
+import { createService, getCategories, type Category } from '@/app/api/endpoints';
 
 export default function CreateService() {
   const navigate = useNavigate();
   const { isEnglish, language } = useLanguage();
+  const [categories, setCategories] = useState<Category[]>([]);
   const [formData, setFormData] = useState({
     title: '',
-    category: '',
+    category_id: '',
     price: '',
-    delivery: '',
+    delivery_days: '',
     description: '',
   });
   const [feedback, setFeedback] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const normalizePrice = (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return '';
-    }
+  useEffect(() => {
+    getCategories()
+      .then(setCategories)
+      .catch((error) => setFeedback(getApiErrorMessage(error)));
+  }, []);
 
-    return trimmed.startsWith('$') ? trimmed : `$${trimmed}`;
-  };
-
-  const normalizePriceInput = (value: string) => value.replace(/[^\d]/g, '');
-  const normalizeDaysInput = (value: string) => value.replace(/[^\d]/g, '');
-  const formatDaysLabel = (value: string) => {
-    const digits = normalizeDaysInput(value);
-    if (!digits) {
-      return '';
-    }
-
-    return `${digits} ${digits === '1' ? (isEnglish ? 'day' : 'يوم') : isEnglish ? 'days' : 'أيام'}`;
-  };
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setFeedback('');
+    setFieldErrors({});
 
-    if (!formData.title || !formData.category || !formData.price || !formData.delivery) {
-      setFeedback(
-        isEnglish
-          ? 'Fill in all required fields before publishing the service.'
-          : 'املأ جميع الحقول الأساسية قبل نشر الخدمة.',
-      );
+    if (!formData.title || !formData.category_id || !formData.price || !formData.delivery_days) {
+      setFeedback(isEnglish ? 'Fill in all required fields before publishing the service.' : 'املأ جميع الحقول الأساسية قبل نشر الخدمة.');
       return;
     }
 
-    createService({
-      ...formData,
-      price: normalizePrice(formData.price),
-      delivery: formatDaysLabel(formData.delivery),
-      provider: 'أحمد محمد',
-      providerId: 1,
-    });
-    navigate('/services/my');
+    try {
+      setIsSubmitting(true);
+      await createService({
+        title: formData.title.trim(),
+        category_id: Number(formData.category_id),
+        price: Number(formData.price),
+        delivery_days: Number(formData.delivery_days),
+        description: formData.description.trim(),
+      });
+      navigate('/services/my');
+    } catch (error) {
+      setFieldErrors(getValidationErrors(error));
+      setFeedback(getApiErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -65,9 +76,7 @@ export default function CreateService() {
         <div>
           <h1 className="text-3xl font-bold">{isEnglish ? 'Publish a New Service' : 'نشر خدمة جديدة'}</h1>
           <p className="mt-1 text-muted-foreground">
-            {isEnglish
-              ? 'Add your service details so it appears ضمن available services.'
-              : 'أضف تفاصيل خدمتك لتظهر ضمن الخدمات المتاحة.'}
+            {isEnglish ? 'Add your service details so it appears in available services.' : 'أضف تفاصيل خدمتك لتظهر ضمن الخدمات المتاحة.'}
           </p>
         </div>
 
@@ -75,9 +84,7 @@ export default function CreateService() {
           <CardHeader>
             <CardTitle>{isEnglish ? 'Service Details' : 'بيانات الخدمة'}</CardTitle>
             <CardDescription>
-              {isEnglish
-                ? 'The service will be saved locally in the project and shown in the services list.'
-                : 'سيتم حفظ الخدمة محليًا داخل المشروع وظهورها في قائمة الخدمات.'}
+              {isEnglish ? 'Service data is sent to the backend using the Laravel field names.' : 'سيتم إرسال بيانات الخدمة إلى الخادم بالحقول المطلوبة.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -87,76 +94,55 @@ export default function CreateService() {
                 <Input
                   id="service-title"
                   value={formData.title}
-                  onChange={(event) =>
-                    setFormData((current) => ({ ...current, title: event.target.value }))
-                  }
+                  onChange={(event) => setFormData((current) => ({ ...current, title: event.target.value }))}
                 />
+                {fieldErrors.title?.[0] ? <p className="text-xs text-destructive">{fieldErrors.title[0]}</p> : null}
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>{isEnglish ? 'Category' : 'التصنيف'}</Label>
                   <Select
-                    value={formData.category}
-                    onValueChange={(value) =>
-                      setFormData((current) => ({ ...current, category: value }))
-                    }
+                    value={formData.category_id}
+                    onValueChange={(value) => setFormData((current) => ({ ...current, category_id: value }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder={isEnglish ? 'Choose category' : 'اختر التصنيف'} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="تصميم">{isEnglish ? 'Design' : 'تصميم'}</SelectItem>
-                      <SelectItem value="برمجة وتطوير">
-                        {isEnglish ? 'Programming & Development' : 'برمجة وتطوير'}
-                      </SelectItem>
-                      <SelectItem value="كتابة وترجمة">
-                        {isEnglish ? 'Writing & Translation' : 'كتابة وترجمة'}
-                      </SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category.id} value={String(category.id)}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                  {fieldErrors.category_id?.[0] ? <p className="text-xs text-destructive">{fieldErrors.category_id[0]}</p> : null}
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="service-price">{isEnglish ? 'Price' : 'السعر'}</Label>
                   <Input
                     id="service-price"
+                    type="number"
+                    min="0"
                     value={formData.price}
-                    onBlur={() =>
-                      setFormData((current) => ({ ...current, price: normalizePrice(current.price) }))
-                    }
-                    onChange={(event) =>
-                      setFormData((current) => ({
-                        ...current,
-                        price: normalizePriceInput(event.target.value),
-                      }))
-                    }
-                    placeholder="$250"
+                    onChange={(event) => setFormData((current) => ({ ...current, price: event.target.value }))}
                   />
+                  {fieldErrors.price?.[0] ? <p className="text-xs text-destructive">{fieldErrors.price[0]}</p> : null}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="service-delivery">
-                  {isEnglish ? 'Delivery Time in Days' : 'مدة التسليم بالأيام'}
-                </Label>
+                <Label htmlFor="service-delivery">{isEnglish ? 'Delivery Time in Days' : 'مدة التسليم بالأيام'}</Label>
                 <Input
                   id="service-delivery"
-                  value={formData.delivery}
-                  onBlur={() =>
-                    setFormData((current) => ({
-                      ...current,
-                      delivery: formatDaysLabel(current.delivery),
-                    }))
-                  }
-                  onChange={(event) =>
-                    setFormData((current) => ({
-                      ...current,
-                      delivery: normalizeDaysInput(event.target.value),
-                    }))
-                  }
-                  placeholder="3"
+                  type="number"
+                  min="1"
+                  value={formData.delivery_days}
+                  onChange={(event) => setFormData((current) => ({ ...current, delivery_days: event.target.value }))}
                 />
+                {fieldErrors.delivery_days?.[0] ? <p className="text-xs text-destructive">{fieldErrors.delivery_days[0]}</p> : null}
               </div>
 
               <div className="space-y-2">
@@ -165,16 +151,17 @@ export default function CreateService() {
                   id="service-description"
                   rows={6}
                   value={formData.description}
-                  onChange={(event) =>
-                    setFormData((current) => ({ ...current, description: event.target.value }))
-                  }
+                  onChange={(event) => setFormData((current) => ({ ...current, description: event.target.value }))}
                 />
+                {fieldErrors.description?.[0] ? <p className="text-xs text-destructive">{fieldErrors.description[0]}</p> : null}
               </div>
 
               {feedback ? <p className="text-sm text-destructive">{feedback}</p> : null}
 
               <div className="flex flex-wrap gap-3">
-                <Button type="submit">{isEnglish ? 'Publish Service' : 'نشر الخدمة'}</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? (isEnglish ? 'Publishing...' : 'جار النشر...') : isEnglish ? 'Publish Service' : 'نشر الخدمة'}
+                </Button>
                 <Button type="button" variant="outline" onClick={() => navigate('/services')}>
                   {isEnglish ? 'Cancel' : 'إلغاء'}
                 </Button>

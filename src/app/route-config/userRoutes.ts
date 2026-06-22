@@ -25,6 +25,7 @@ const SupportCenter = lazyPage(() => import('@/app/pages/user/SupportCenter'));
 
 export const userRoutes = [
   { path: '/dashboard', Component: Dashboard },
+  { path: '/dashboard/personal', Component: Dashboard },
   { path: '/projects', Component: Projects },
   { path: '/projects/create', Component: CreateProject },
   { path: '/projects/:id', Component: ProjectDetails },

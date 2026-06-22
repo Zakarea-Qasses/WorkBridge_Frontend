@@ -1,307 +1,84 @@
-import { useMemo, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { MessageSquare, Wallet } from 'lucide-react';
+import { LoaderCircle } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
+import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from '@/app/components/ui';
+import { ApiError, getApiErrorMessage, getValidationErrors } from '@/app/api/client';
+import { getService, requestService, type Service } from '@/app/api/endpoints';
+import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Input,
-  Label,
-  Textarea,
-} from '@/app/components/ui';
-import { getDisplayCategoryLabel, getDisplayDurationLabel } from '@/app/data';
-import { createServiceRequest, getServiceById } from '@/app/storage';
 
 export default function RequestService() {
+  const { id } = useParams();
   const navigate = useNavigate();
-  const params = useParams();
+  const { user } = useAuth();
   const { isEnglish, language } = useLanguage();
-  const serviceId = Number(params.id);
-  const service = useMemo(() => getServiceById(serviceId), [serviceId]);
-  const [feedback, setFeedback] = useState('');
-  const [form, setForm] = useState({
-    requestTitle: '',
-    details: '',
-    references: '',
-    deadline: '',
-  });
+  const [service, setService] = useState<Service | null>(null);
+  const [form, setForm] = useState({ title: '', description: '', references: '', delivery_days: '' });
+  const [errors, setErrors] = useState<Record<string, string[]>>({});
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
-  const normalizeDaysInput = (value: string) => value.replace(/[^\d]/g, '');
-
-  const formatDaysLabel = (value: string) => {
-    const digits = normalizeDaysInput(value);
-    if (!digits) {
-      return '';
-    }
-
-    return `${digits} ${digits === '1' ? (isEnglish ? 'day' : 'يوم') : isEnglish ? 'days' : 'أيام'}`;
-  };
-
-  const handleDeadlineChange = (value: string) => {
-    const normalizedValue = normalizeDaysInput(value);
-
-    if (!normalizedValue) {
-      setForm((current) => ({
-        ...current,
-        deadline: '',
-      }));
-      setFeedback('');
+  useEffect(() => {
+    const numericId = Number(id);
+    if (!Number.isInteger(numericId) || numericId <= 0) {
+      setMessage(isEnglish ? 'Invalid service ID.' : 'رقم الخدمة غير صالح.');
+      setLoading(false);
       return;
     }
+    let mounted = true;
+    getService(numericId).then((data) => { if (mounted) setService(data); }).catch((error) => {
+      if (mounted) setMessage(error instanceof ApiError && error.status === 404 ? (isEnglish ? 'Service not found.' : 'الخدمة غير موجودة.') : (isEnglish ? 'Unable to load service.' : 'تعذر تحميل الخدمة.'));
+    }).finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, [id, isEnglish]);
 
-    if (Number(normalizedValue) === 0) {
-      setForm((current) => ({
-        ...current,
-        deadline: '',
-      }));
-      setFeedback(isEnglish ? 'You cannot enter 0 in the number of days.' : 'لا يمكن إدخال 0 في عدد الأيام.');
-      return;
-    }
-
-    setForm((current) => ({
-      ...current,
-      deadline: String(Number(normalizedValue)),
-    }));
-    setFeedback('');
-  };
-
-  if (!service) {
-    return (
-      <DashboardLayout>
-        <div className="space-y-4" dir={language === 'en' ? 'ltr' : 'rtl'}>
-          <h1 className="text-3xl font-bold">{isEnglish ? 'Request Service' : 'طلب خدمة'}</h1>
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-muted-foreground">
-                {isEnglish ? 'The requested service was not found or is no longer available.' : 'الخدمة المطلوبة غير موجودة أو لم تعد متاحة.'}
-              </p>
-              <div className="mt-4">
-                <Button asChild>
-                  <Link to="/services">{isEnglish ? 'Back to services' : 'العودة إلى الخدمات'}</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
-
-    if (!form.requestTitle.trim() || !form.details.trim() || !form.deadline.trim()) {
-      setFeedback(
-        isEnglish
-          ? 'Complete the request title, details, and deadline before sending.'
-          : 'أكمل عنوان الطلب والتفاصيل وموعد التسليم قبل الإرسال.',
-      );
-      return;
+    if (!service) return;
+    try {
+      setSubmitting(true);
+      setMessage('');
+      setErrors({});
+      await requestService(service.id, {
+        title: form.title.trim(),
+        description: form.description.trim(),
+        references: form.references.trim() || null,
+        delivery_days: Number(form.delivery_days),
+      });
+      navigate('/services/requests', { replace: true });
+    } catch (error) {
+      setErrors(getValidationErrors(error));
+      setMessage(getApiErrorMessage(error));
+    } finally {
+      setSubmitting(false);
     }
-
-    if (Number(normalizeDaysInput(form.deadline)) <= 0) {
-      setFeedback(isEnglish ? 'Number of days must be greater than 0.' : 'عدد الأيام يجب أن يكون أكبر من 0.');
-      return;
-    }
-
-    createServiceRequest({
-      serviceId: service.id,
-      serviceTitle: service.title,
-      provider: service.provider,
-      providerId: service.providerId,
-      client: 'أحمد محمد',
-      clientId: 1,
-      price: service.price,
-      requestTitle: form.requestTitle,
-      details: form.details,
-      references: form.references,
-      deadline: formatDaysLabel(form.deadline),
-    });
-
-    setFeedback(
-      isEnglish
-        ? `The service request was sent to ${service.provider} successfully.`
-        : `تم إرسال طلب الخدمة إلى ${service.provider} بنجاح.`,
-    );
-    setForm({
-      requestTitle: '',
-      details: '',
-      references: '',
-      deadline: '',
-    });
-
-    navigate('/services/requests');
   };
 
   return (
     <DashboardLayout>
-      <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Link to="/services" className="hover:text-primary">
-            {isEnglish ? 'Services' : 'الخدمات'}
-          </Link>
-          <span>/</span>
-          <span className="text-foreground">{isEnglish ? 'Request Service' : 'طلب خدمة'}</span>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">{isEnglish ? 'Request Service' : 'طلب خدمة'}</h1>
-            <p className="mt-1 text-muted-foreground">
-              {isEnglish
-                ? 'Send clear details to the service provider before execution starts.'
-                : 'أرسل تفاصيل واضحة لمقدم الخدمة قبل بدء التنفيذ.'}
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={() => navigate('/messages')}>
-              <MessageSquare className="ml-2 size-4" />
-              {isEnglish ? 'Message provider' : 'مراسلة مقدم الخدمة'}
-            </Button>
-            <Button asChild variant="outline">
-              <Link to="/services">{isEnglish ? 'Back to services' : 'العودة إلى الخدمات'}</Link>
-            </Button>
-          </div>
-        </div>
-
-        {feedback ? (
-          <Card className="border-primary/20 bg-primary/5">
-            <CardContent className="pt-6 text-sm text-primary">{feedback}</CardContent>
-          </Card>
-        ) : null}
-
-        <div className="grid gap-6 lg:grid-cols-[1.3fr_0.9fr]">
-          <Card>
-            <CardHeader>
-              <CardTitle>{isEnglish ? 'Request Details' : 'تفاصيل الطلب'}</CardTitle>
-              <CardDescription>
-                {isEnglish ? 'Explain clearly to the provider what you need exactly.' : 'اشرح لمقدم الخدمة ما الذي تحتاجه بالضبط.'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-4" onSubmit={handleSubmit}>
-                <div className="space-y-2">
-                  <Label htmlFor="request-title">{isEnglish ? 'Request Title' : 'عنوان الطلب'}</Label>
-                  <Input
-                    id="request-title"
-                    value={form.requestTitle}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, requestTitle: event.target.value }))
-                    }
-                    placeholder={isEnglish ? 'Example: Design a landing page for a new product launch' : 'مثال: تصميم صفحة هبوط لإطلاق منتج جديد'}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="request-details">{isEnglish ? 'What You Need' : 'تفاصيل ما تحتاجه'}</Label>
-                  <Textarea
-                    id="request-details"
-                    rows={7}
-                    value={form.details}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, details: event.target.value }))
-                    }
-                    placeholder={isEnglish ? 'Write the required work details, expected result, and any important notes.' : 'اكتب تفاصيل العمل المطلوب، النتيجة المتوقعة، وأي ملاحظات مهمة.'}
-                    className="resize-none"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="request-references">{isEnglish ? 'Links or References' : 'روابط أو مراجع'}</Label>
-                  <Textarea
-                    id="request-references"
-                    rows={4}
-                    value={form.references}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, references: event.target.value }))
-                    }
-                    placeholder={isEnglish ? 'Add sample links, visual references, or files you want to rely on.' : 'أضف روابط أمثلة أو مراجع بصرية أو ملفات تريد الاعتماد عليها.'}
-                    className="resize-none"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="request-deadline">
-                    {isEnglish ? 'Requested Delivery Time in Days' : 'موعد التسليم المطلوب بالأيام'}
-                  </Label>
-                  <Input
-                    id="request-deadline"
-                    value={form.deadline}
-                    onBlur={() =>
-                      setForm((current) => ({
-                        ...current,
-                        deadline: formatDaysLabel(current.deadline),
-                      }))
-                    }
-                    onChange={(event) => handleDeadlineChange(event.target.value)}
-                    placeholder="5"
-                  />
-                </div>
-
-                <Button type="submit" className="w-full">
-                  {isEnglish ? 'Send Request' : 'إرسال الطلب'}
-                </Button>
+      <div className="mx-auto max-w-4xl space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
+        <div><h1 className="text-3xl font-bold">{isEnglish ? 'Request Service' : 'طلب خدمة'}</h1></div>
+        {loading ? <div className="h-64 animate-pulse rounded-lg bg-muted" /> : !service ? (
+          <Card><CardContent className="py-12 text-center"><p>{message}</p><Button asChild className="mt-4"><Link to="/services">{isEnglish ? 'Back to services' : 'العودة إلى الخدمات'}</Link></Button></CardContent></Card>
+        ) : service.user_id === user?.id ? (
+          <Card><CardContent className="py-12 text-center">{isEnglish ? 'You cannot request your own service.' : 'لا يمكنك طلب خدمتك أنت.'}</CardContent></Card>
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-[1fr_0.7fr]">
+            <Card><CardHeader><CardTitle>{isEnglish ? 'Request details' : 'تفاصيل الطلب'}</CardTitle></CardHeader><CardContent>
+              <form className="space-y-4" onSubmit={submit}>
+                <div className="space-y-2"><Label>{isEnglish ? 'Title' : 'عنوان الطلب'}</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />{errors.title?.[0] ? <p className="text-xs text-destructive">{errors.title[0]}</p> : null}</div>
+                <div className="space-y-2"><Label>{isEnglish ? 'Description' : 'تفاصيل الطلب'}</Label><Textarea rows={6} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />{errors.description?.[0] ? <p className="text-xs text-destructive">{errors.description[0]}</p> : null}</div>
+                <div className="space-y-2"><Label>{isEnglish ? 'References' : 'روابط أو مراجع'}</Label><Textarea rows={3} value={form.references} onChange={(e) => setForm({ ...form, references: e.target.value })} /></div>
+                <div className="space-y-2"><Label>{isEnglish ? 'Delivery days' : 'مدة التسليم المطلوبة بالأيام'}</Label><Input type="number" min="1" value={form.delivery_days} onChange={(e) => setForm({ ...form, delivery_days: e.target.value })} />{errors.delivery_days?.[0] ? <p className="text-xs text-destructive">{errors.delivery_days[0]}</p> : null}</div>
+                {message ? <p className="text-sm text-destructive">{message}</p> : null}
+                <Button className="w-full" disabled={submitting}>{submitting ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}{submitting ? (isEnglish ? 'Sending...' : 'جار الإرسال...') : (isEnglish ? 'Send Request' : 'إرسال الطلب')}</Button>
               </form>
-            </CardContent>
-          </Card>
-
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{service.title}</CardTitle>
-                <CardDescription>{service.provider}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Badge variant="outline">{getDisplayCategoryLabel(service.category, isEnglish)}</Badge>
-                <p className="text-sm text-muted-foreground">{service.description}</p>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">{isEnglish ? 'Delivery time' : 'مدة التنفيذ'}</span>
-                    <span className="font-medium">{getDisplayDurationLabel(service.delivery, isEnglish)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">{isEnglish ? 'Rating' : 'التقييم'}</span>
-                    <span className="font-medium">{service.rating}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">{isEnglish ? 'Orders count' : 'عدد الطلبات'}</span>
-                    <span className="font-medium">{service.orders}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-primary/20 bg-primary/5">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Wallet className="size-5 text-primary" />
-                  {isEnglish ? 'Financial Summary' : 'الملخص المالي'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">{isEnglish ? 'Service price' : 'سعر الخدمة'}</span>
-                  <span className="font-semibold">{service.price}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">{isEnglish ? 'Current status' : 'الحالة الحالية'}</span>
-                  <span className="font-semibold">{isEnglish ? 'Awaiting request submission' : 'بانتظار إرسال الطلب'}</span>
-                </div>
-                <p className="text-muted-foreground">
-                  {isEnglish
-                    ? 'After sending the request, you can follow up with the provider before execution starts.'
-                    : 'بعد إرسال الطلب يمكن متابعة التفاصيل مع مقدم الخدمة قبل البدء بالتنفيذ.'}
-                </p>
-              </CardContent>
-            </Card>
+            </CardContent></Card>
+            <Card><CardHeader><CardTitle>{service.title}</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><p className="text-muted-foreground">{service.description || (isEnglish ? 'No description.' : 'لا يوجد وصف.')}</p><p>{isEnglish ? 'Provider:' : 'مقدم الخدمة:'} {service.user?.name}</p><p>{isEnglish ? 'Price:' : 'السعر:'} {service.price}</p><p>{isEnglish ? 'Default delivery:' : 'مدة التسليم:'} {service.delivery_days} {isEnglish ? 'days' : 'يوم'}</p></CardContent></Card>
           </div>
-        </div>
+        )}
       </div>
     </DashboardLayout>
   );

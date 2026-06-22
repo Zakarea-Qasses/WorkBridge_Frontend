@@ -1,200 +1,119 @@
-import { useMemo, useState } from 'react';
-import { CheckCircle2, Clock3, XCircle } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { CheckCircle2, MessageSquare, RefreshCw, XCircle } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
-import { getDisplayDurationLabel, getDisplayStatusLabel } from '@/app/data';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui';
+import { acceptServiceRequest, getMyServiceRequests, getReceivedServiceRequests, rejectServiceRequest, startConversation, type ServiceRequest } from '@/app/api/endpoints';
 import { useLanguage } from '@/app/providers/LanguageProvider';
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui';
-import { createContract, getServiceRequests, updateServiceRequestStatus } from '@/app/storage';
 
-function getStatusBadge(status: string) {
-  switch (status) {
-    case 'مقبول':
-      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-    case 'مرفوض':
-      return 'bg-rose-100 text-rose-700 border-rose-200';
-    case 'مؤجل':
-      return 'bg-slate-100 text-slate-700 border-slate-200';
-    default:
-      return 'bg-amber-100 text-amber-800 border-amber-200';
+function statusLabel(status: ServiceRequest['status'], isEnglish: boolean) {
+  if (status === 'accepted') return isEnglish ? 'Accepted' : 'مقبول';
+  if (status === 'rejected') return isEnglish ? 'Rejected' : 'مرفوض';
+  return isEnglish ? 'Pending' : 'قيد الانتظار';
+}
+
+function RequestList({ items, incoming, isEnglish, busyId, onDecision, onMessage }: {
+  items: ServiceRequest[];
+  incoming: boolean;
+  isEnglish: boolean;
+  busyId: number | null;
+  onDecision: (id: number, decision: 'accept' | 'reject') => void;
+  onMessage: (request: ServiceRequest, incoming: boolean) => void;
+}) {
+  if (!items.length) {
+    return <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">{isEnglish ? 'No service requests yet.' : 'لا توجد طلبات خدمات حتى الآن.'}</div>;
   }
+  return <div className="space-y-4">{items.map((request) => (
+    <div key={request.id} className="space-y-3 rounded-lg border p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div><h3 className="font-semibold">{request.title}</h3><p className="text-sm text-muted-foreground">{incoming ? request.client?.name : request.service?.user?.name} · {request.service?.title}</p></div>
+        <Badge variant="outline">{statusLabel(request.status, isEnglish)}</Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">{request.description}</p>
+      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground"><span>{request.delivery_days} {isEnglish ? 'days' : 'يوم'}</span><span>{request.created_at ? new Date(request.created_at).toLocaleDateString(isEnglish ? 'en' : 'ar') : ''}</span></div>
+      {incoming && request.status === 'pending' ? <div className="flex gap-2"><Button size="sm" disabled={busyId === request.id} onClick={() => onDecision(request.id, 'accept')}><CheckCircle2 className="me-2 size-4" />{isEnglish ? 'Accept' : 'قبول'}</Button><Button size="sm" variant="outline" disabled={busyId === request.id} onClick={() => onDecision(request.id, 'reject')}><XCircle className="me-2 size-4" />{isEnglish ? 'Reject' : 'رفض'}</Button></div> : null}
+      {request.status === 'accepted' ? (
+        <Button size="sm" variant="outline" disabled={busyId === request.id} onClick={() => onMessage(request, incoming)}>
+          <MessageSquare className="me-2 size-4" />
+          {isEnglish ? 'Message the other party' : 'مراسلة الطرف الآخر'}
+        </Button>
+      ) : null}
+    </div>
+  ))}</div>;
 }
 
 export default function ServiceRequests() {
+  const navigate = useNavigate();
   const { isEnglish, language } = useLanguage();
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [feedback, setFeedback] = useState(
-    isEnglish
-      ? 'Here you can see the requests you sent, and the requests received by you as a service provider inside the interface.'
-      : 'تظهر هنا الطلبات المرسلة منك، والطلبات الواردة إليك كمقدم خدمة داخل الواجهة.',
-  );
+  const [sent, setSent] = useState<ServiceRequest[]>([]);
+  const [received, setReceived] = useState<ServiceRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [busyId, setBusyId] = useState<number | null>(null);
 
-  const requests = useMemo(() => getServiceRequests(), [refreshKey]);
-  const outgoingRequests = requests.filter((request) => request.clientId === 1);
-  const incomingRequests = requests.filter((request) => request.providerId === 1);
-
-  const handleStatusChange = (
-    id: number,
-    status: 'مقبول' | 'مرفوض' | 'مؤجل',
-    title: string,
-  ) => {
-    const targetRequest = requests.find((request) => request.id === id);
-    updateServiceRequestStatus(id, status);
-    if (status === 'مقبول' && targetRequest) {
-      const amount = Number(targetRequest.price.replace(/[^\d]/g, ''));
-      const commission = Math.round(amount * 0.1);
-
-      createContract({
-        postId: targetRequest.serviceId,
-        postTitle: targetRequest.requestTitle,
-        postType: 'خدمة',
-        clientId: targetRequest.clientId,
-        clientName: targetRequest.client,
-        freelancerId: targetRequest.providerId,
-        freelancerName: targetRequest.provider,
-        companyId: targetRequest.client.includes('شركة') ? 1 : undefined,
-        companyName: targetRequest.client.includes('شركة') ? targetRequest.client : undefined,
-        amount,
-        commission,
-        finalAmount: amount - commission,
-        status: 'بانتظار البدء',
-      });
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [myRequests, receivedRequests] = await Promise.all([getMyServiceRequests(), getReceivedServiceRequests()]);
+      setSent(myRequests);
+      setReceived(receivedRequests);
+    } catch {
+      setError(isEnglish ? 'Unable to load service requests.' : 'تعذر تحميل طلبات الخدمات');
+    } finally {
+      setLoading(false);
     }
-    setRefreshKey((current) => current + 1);
-    setFeedback(
-      isEnglish
-        ? `The service request "${title}" was ${status === 'مقبول' ? 'accepted' : status === 'مرفوض' ? 'rejected' : 'postponed'}${status === 'مقبول' ? ' and a new contract was created for it.' : '.'}`
-        : `تم ${status === 'مقبول' ? 'قبول' : status === 'مرفوض' ? 'رفض' : 'تأجيل'} طلب الخدمة: ${title}${status === 'مقبول' ? ' وإنشاء عقد جديد له.' : '.'}`,
-    );
+  }, [isEnglish]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const decide = async (id: number, decision: 'accept' | 'reject') => {
+    try {
+      setBusyId(id);
+      if (decision === 'accept') await acceptServiceRequest(id);
+      else await rejectServiceRequest(id);
+      setReceived((current) => current.map((item) => item.id === id ? { ...item, status: decision === 'accept' ? 'accepted' : 'rejected' } : item));
+    } catch {
+      setError(isEnglish ? 'The request could not be updated.' : 'تعذر تحديث حالة الطلب');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const openConversation = async (request: ServiceRequest, incoming: boolean) => {
+    const otherUserId = incoming ? request.client?.id : request.service?.user?.id;
+    if (!otherUserId) {
+      setError(isEnglish ? 'The other party could not be identified.' : 'تعذر تحديد الطرف الآخر');
+      return;
+    }
+
+    try {
+      setBusyId(request.id);
+      const conversation = await startConversation(otherUserId);
+      navigate(`/messages?conversation=${conversation.id}`);
+    } catch {
+      setError(isEnglish ? 'Unable to open the conversation.' : 'تعذر فتح المحادثة');
+    } finally {
+      setBusyId(null);
+    }
   };
 
   return (
     <DashboardLayout>
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
-        <section>
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-3xl font-bold">{isEnglish ? 'Service Requests' : 'طلبات الخدمات'}</h1>
-          <p className="mt-1 text-muted-foreground">
-            {isEnglish
-              ? 'Track requests you sent as a client, and requests received by you as a service provider.'
-              : 'متابعة الطلبات التي أرسلتها كعميل، والطلبات الواردة إليك كمقدم خدمة.'}
-          </p>
-        </section>
-
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="pt-6 text-sm text-primary">{feedback}</CardContent>
-        </Card>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>{isEnglish ? 'My Requests as a Client' : 'طلباتي كعميل'}</CardTitle>
-              <CardDescription>
-                {isEnglish
-                  ? 'Every service request you sent from the services interface.'
-                  : 'كل طلب خدمة قمت بإرساله من واجهة الخدمات.'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {outgoingRequests.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                  {isEnglish ? 'There are no service requests sent yet.' : 'لا توجد طلبات خدمات مرسلة حتى الآن.'}
-                </div>
-              ) : null}
-
-              {outgoingRequests.map((request) => (
-                <div key={request.id} className="space-y-3 rounded-2xl border border-border p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="font-semibold">{request.requestTitle}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {isEnglish ? 'Service:' : 'الخدمة:'} {request.serviceTitle} | {isEnglish ? 'Provider:' : 'مقدم الخدمة:'} {request.provider}
-                      </p>
-                    </div>
-                    <Badge className={getStatusBadge(request.status)}>
-                      {getDisplayStatusLabel(request.status, isEnglish)}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{request.details}</p>
-                  <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                    <span>{isEnglish ? 'Price:' : 'السعر:'} {request.price}</span>
-                    <span>{isEnglish ? 'Deadline:' : 'الموعد:'} {getDisplayDurationLabel(request.deadline, isEnglish)}</span>
-                    <span>{isEnglish ? 'Sent at:' : 'تاريخ الإرسال:'} {request.createdAt}</span>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>{isEnglish ? 'Incoming Requests' : 'الطلبات الواردة إليك'}</CardTitle>
-              <CardDescription>
-                {isEnglish
-                  ? 'Service requests received by you as a provider.'
-                  : 'طلبات خدمات وصلت إليك كمقدم خدمة.'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {incomingRequests.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                  {isEnglish ? 'There are no incoming requests yet.' : 'لا توجد طلبات واردة حتى الآن.'}
-                </div>
-              ) : null}
-
-              {incomingRequests.map((request) => (
-                <div key={request.id} className="space-y-3 rounded-2xl border border-border p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="font-semibold">{request.requestTitle}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {isEnglish ? 'From:' : 'من:'} {request.client} | {isEnglish ? 'Service:' : 'الخدمة:'} {request.serviceTitle}
-                      </p>
-                    </div>
-                    <Badge className={getStatusBadge(request.status)}>
-                      {getDisplayStatusLabel(request.status, isEnglish)}
-                    </Badge>
-                  </div>
-
-                  <p className="text-sm text-muted-foreground">{request.details}</p>
-
-                  <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                    <span>{isEnglish ? 'Price:' : 'السعر:'} {request.price}</span>
-                    <span>{isEnglish ? 'Requested deadline:' : 'الموعد المطلوب:'} {getDisplayDurationLabel(request.deadline, isEnglish)}</span>
-                    <span>{isEnglish ? 'Sent at:' : 'تاريخ الإرسال:'} {request.createdAt}</span>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => handleStatusChange(request.id, 'مقبول', request.requestTitle)}
-                      disabled={request.status !== 'بانتظار المراجعة'}
-                    >
-                      <CheckCircle2 className="ml-2 size-4" />
-                      {isEnglish ? 'Accept' : 'قبول'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleStatusChange(request.id, 'مرفوض', request.requestTitle)}
-                      disabled={request.status !== 'بانتظار المراجعة'}
-                    >
-                      <XCircle className="ml-2 size-4" />
-                      {isEnglish ? 'Reject' : 'رفض'}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleStatusChange(request.id, 'مؤجل', request.requestTitle)}
-                      disabled={request.status !== 'بانتظار المراجعة'}
-                    >
-                      <Clock3 className="ml-2 size-4" />
-                      {isEnglish ? 'Follow up later' : 'متابعة لاحقًا'}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          <Button variant="outline" onClick={load} disabled={loading}>
+            <RefreshCw className={`me-2 size-4 ${loading ? 'animate-spin' : ''}`} />
+            {isEnglish ? 'Refresh requests' : 'تحديث الطلبات'}
+          </Button>
         </div>
+        {loading ? <div className="h-64 animate-pulse rounded-lg bg-muted" /> : error ? <Card><CardContent className="py-12 text-center"><p>{error}</p><Button className="mt-4" onClick={load}><RefreshCw className="me-2 size-4" />{isEnglish ? 'Try again' : 'إعادة المحاولة'}</Button></CardContent></Card> : (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card><CardHeader><CardTitle>{isEnglish ? 'Requests I Sent' : 'الطلبات التي أرسلتها'}</CardTitle></CardHeader><CardContent><RequestList items={sent} incoming={false} isEnglish={isEnglish} busyId={busyId} onDecision={decide} onMessage={openConversation} /></CardContent></Card>
+            <Card><CardHeader><CardTitle>{isEnglish ? 'Requests I Received' : 'الطلبات الواردة إلي'}</CardTitle></CardHeader><CardContent><RequestList items={received} incoming isEnglish={isEnglish} busyId={busyId} onDecision={decide} onMessage={openConversation} /></CardContent></Card>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

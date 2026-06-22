@@ -1,255 +1,130 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { MessageSquare, RefreshCw } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
-import { useLanguage } from '@/app/providers/LanguageProvider';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui';
 import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/app/components/ui';
-import { getDisplayStatusLabel, getDisplayTypeLabel } from '@/app/data';
-import { getContractsForUser, updateContractStatus } from '@/app/storage';
+  cancelContract,
+  completeContract,
+  getCompanyContracts,
+  getContracts,
+  startContract,
+  startConversation,
+  type Contract,
+} from '@/app/api/endpoints';
+import { useAuth } from '@/app/providers/AuthProvider';
+import { useLanguage } from '@/app/providers/LanguageProvider';
 
-function getStatusBadge(status: string) {
-  switch (status) {
-    case 'Completed':
-      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-    case 'In Progress':
-      return 'bg-blue-100 text-blue-700 border-blue-200';
-    case 'Awaiting Delivery':
-      return 'bg-amber-100 text-amber-800 border-amber-200';
-    default:
-      return 'bg-slate-100 text-slate-700 border-slate-200';
-  }
+function contractTitle(contract: Contract, isEnglish: boolean) {
+  return contract.service_request?.title || contract.project?.title || contract.job_post?.title ||
+    (isEnglish ? `Contract #${contract.id}` : `العقد رقم ${contract.id}`);
 }
 
-function getContractOriginLabel(postType: string, isEnglish: boolean) {
-  switch (postType) {
-    case 'Service':
-      return isEnglish
-        ? 'This contract was created after accepting a request for a published service.'
-        : 'هذا العقد نشأ بعد قبول طلب على خدمة منشورة.';
-    case 'Job':
-      return isEnglish
-        ? 'This contract was created after agreeing on a job opportunity or direct hire.'
-        : 'هذا العقد نشأ بعد الاتفاق على فرصة وظيفية أو تعاقد مباشر.';
-    default:
-      return isEnglish
-        ? 'This contract was created after accepting an offer on a project.'
-        : 'هذا العقد نشأ بعد قبول عرض على مشروع.';
-  }
+function statusLabel(status: Contract['status'], isEnglish: boolean) {
+  const labels: Record<Contract['status'], [string, string]> = {
+    pending: ['Pending funding', 'بانتظار البدء'],
+    funded: ['Funded', 'ممول'],
+    in_progress: ['In progress', 'قيد التنفيذ'],
+    completed: ['Completed', 'مكتمل'],
+    canceled: ['Canceled', 'ملغى'],
+    refunded: ['Refunded', 'تم رد المبلغ'],
+    dispute: ['In dispute', 'قيد النزاع'],
+  };
+  return labels[status][isEnglish ? 0 : 1];
 }
 
-function getNextStepForUser(status: string, isEnglish: boolean) {
-  switch (status) {
-    case 'Awaiting Start':
-      return isEnglish
-        ? 'The contract is officially active, and the next step is to start execution.'
-        : 'العقد جاهز وبدأ رسميًا، والخطوة التالية هي بدء التنفيذ.';
-    case 'In Progress':
-      return isEnglish
-        ? 'Work is now in progress. Once execution is finished, you can move it to awaiting delivery.'
-        : 'العمل جارٍ الآن. عندما تنهي التنفيذ يمكنك نقله إلى بانتظار التسليم.';
-    case 'Awaiting Delivery':
-      return isEnglish
-        ? 'The work was submitted to the other party, and you can now confirm completion if everything is finished.'
-        : 'تم إرسال العمل للطرف الآخر، ويمكنك الآن تأكيد الإكمال إذا انتهى كل شيء.';
-    default:
-      return isEnglish
-        ? 'The contract has ended and its completion was recorded successfully.'
-        : 'العقد انتهى وتم توثيق اكتماله بنجاح.';
-  }
-}
-
-export default function Contracts() {
+export function ContractsPage({ userType = 'user' }: { userType?: 'user' | 'company' }) {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const { isEnglish, language } = useLanguage();
-  const [contracts, setContracts] = useState(() => getContractsForUser(1));
-  const [feedback, setFeedback] = useState(
-    isEnglish
-      ? 'A contract is the official agreement created after accepting an offer or service request. From here, you track its status step by step.'
-      : 'العقد هو الاتفاق الرسمي الذي يتولد بعد قبول عرض أو قبول طلب خدمة، ومن هنا تتابع حالته خطوة بخطوة.',
-  );
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [error, setError] = useState('');
 
-  const handleStatusChange = (
-    contractId: number,
-    status: Parameters<typeof updateContractStatus>[1],
-    message: string,
-  ) => {
-    const nextContracts = updateContractStatus(contractId, status);
-    setContracts(
-      nextContracts.filter((contract) => contract.clientId === 1 || contract.freelancerId === 1),
-    );
-    setFeedback(message);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setContracts(userType === 'company' ? await getCompanyContracts() : await getContracts());
+    } catch {
+      setError(isEnglish ? 'Unable to load contracts.' : 'تعذر تحميل العقود');
+    } finally {
+      setLoading(false);
+    }
+  }, [isEnglish, userType]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const runAction = async (contract: Contract, action: 'start' | 'complete' | 'cancel') => {
+    try {
+      setBusyId(contract.id);
+      if (action === 'start') await startContract(contract.id);
+      else if (action === 'complete') await completeContract(contract.id);
+      else await cancelContract(contract.id);
+      await load();
+    } catch {
+      setError(isEnglish ? 'The contract could not be updated.' : 'تعذر تحديث العقد');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const messageOtherParty = async (contract: Contract) => {
+    const otherId = contract.client_id === user?.id ? contract.freelancer_id : contract.client_id;
+    try {
+      setBusyId(contract.id);
+      const conversation = await startConversation(otherId);
+      const path = userType === 'company' ? '/company/messages' : '/messages';
+      navigate(`${path}?conversation=${conversation.id}`);
+    } catch {
+      setError(isEnglish ? 'Unable to open the conversation.' : 'تعذر فتح المحادثة');
+    } finally {
+      setBusyId(null);
+    }
   };
 
   return (
-    <DashboardLayout>
+    <DashboardLayout userType={userType === 'company' ? 'company' : 'user'}>
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
-        <section className="rounded-3xl border border-border bg-gradient-to-l from-slate-50 via-white to-blue-50 p-6">
-          <h1 className="text-3xl font-bold">{isEnglish ? 'Contracts' : 'العقود'}</h1>
-          <p className="mt-2 text-muted-foreground">
-            {isEnglish
-              ? 'This page does not create contracts manually. Instead, it shows official agreements formed after acceptance. Before acceptance there is a project or service, and after acceptance the contract appears here to track execution.'
-              : 'هذه الصفحة لا تنشئ العقد يدويًا، بل تعرض الاتفاقات الرسمية التي تشكلت بعد القبول. يعني: قبل القبول يوجد مشروع أو خدمة، وبعد القبول يظهر العقد هنا لمتابعة التنفيذ.'}
-          </p>
-        </section>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">
-                {isEnglish ? 'When does a contract appear?' : 'متى يظهر العقد؟'}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-foreground">
-                {isEnglish
-                  ? 'It appears after accepting a project offer, service request, or a clear contractual agreement.'
-                  : 'يظهر بعد قبول عرض مشروع أو قبول طلب خدمة أو اتفاق تعاقدي واضح.'}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">
-                {isEnglish ? 'What is this page for?' : 'ما وظيفة الصفحة؟'}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-foreground">
-                {isEnglish
-                  ? 'To follow the agreement status instead of losing it between messages, the project, and the wallet.'
-                  : 'متابعة حالة الاتفاق بدل ضياعه بين الرسائل والمشروع والمحفظة.'}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">
-                {isEnglish ? 'What is expected from you?' : 'ما المطلوب منك؟'}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-foreground">
-                {isEnglish
-                  ? 'Move the contract from start to execution, then delivery, then completion depending on the current stage.'
-                  : 'تنقل العقد من البدء إلى التنفيذ ثم التسليم ثم الإكمال بحسب المرحلة الحالية.'}
-              </p>
-            </CardContent>
-          </Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><h1 className="text-3xl font-bold">{isEnglish ? 'Contracts' : 'العقود'}</h1><p className="mt-1 text-muted-foreground">{isEnglish ? 'Contracts created after accepting projects or service requests.' : 'العقود المنشأة بعد قبول المشاريع أو طلبات الخدمات.'}</p></div>
+          <Button variant="outline" onClick={load}><RefreshCw className="me-2 size-4" />{isEnglish ? 'Refresh' : 'تحديث'}</Button>
         </div>
 
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="pt-6 text-sm text-primary">{feedback}</CardContent>
-        </Card>
+        {error ? <Card className="border-destructive/30"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card> : null}
 
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {contracts.map((contract) => (
-            <Card key={contract.id}>
-              <CardHeader className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <CardTitle>{contract.postTitle}</CardTitle>
-                    <CardDescription>{getDisplayTypeLabel(contract.postType, isEnglish)}</CardDescription>
-                  </div>
-                  <Badge className={getStatusBadge(contract.status)}>
-                    {getDisplayStatusLabel(contract.status, isEnglish)}
-                  </Badge>
-                </div>
-                <CardDescription>{getContractOriginLabel(contract.postType, isEnglish)}</CardDescription>
-              </CardHeader>
-
-              <CardContent className="space-y-4 text-sm">
-                <div className="space-y-2">
-                  <p>
-                    {isEnglish ? 'Client:' : 'العميل:'} <span className="font-medium">{contract.clientName}</span>
-                  </p>
-                  <p>
-                    {isEnglish ? 'Service provider:' : 'مقدم الخدمة:'}{' '}
-                    <span className="font-medium">{contract.freelancerName}</span>
-                  </p>
-                  <p>
-                    {isEnglish ? 'Amount:' : 'المبلغ:'} <span className="font-medium">${contract.amount}</span>
-                  </p>
-                  <p>
-                    {isEnglish ? 'Commission:' : 'العمولة:'}{' '}
-                    <span className="font-medium">${contract.commission}</span>
-                  </p>
-                  <p>
-                    {isEnglish ? 'Final net:' : 'الصافي النهائي:'}{' '}
-                    <span className="font-medium">${contract.finalAmount}</span>
-                  </p>
-                  <p>
-                    {isEnglish ? 'Created at:' : 'تاريخ الإنشاء:'}{' '}
-                    <span className="font-medium">{contract.createdAt}</span>
-                  </p>
-                </div>
-
-                <div className="rounded-2xl bg-muted p-4">
-                  <p className="text-xs text-muted-foreground">
-                    {isEnglish ? 'Next step' : 'الخطوة التالية'}
-                  </p>
-                  <p className="mt-2 leading-6 text-foreground">
-                    {getNextStepForUser(contract.status, isEnglish)}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {contract.status === 'Awaiting Start' ? (
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        handleStatusChange(
-                          contract.id,
-                          'In Progress',
-                          isEnglish
-                            ? `Execution for "${contract.postTitle}" has started.`
-                            : `تم بدء تنفيذ العقد "${contract.postTitle}".`,
-                        )
-                      }
-                    >
-                      {isEnglish ? 'Start execution' : 'بدء التنفيذ'}
-                    </Button>
-                  ) : null}
-
-                  {contract.status === 'In Progress' ? (
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        handleStatusChange(
-                          contract.id,
-                          'Awaiting Delivery',
-                          isEnglish
-                            ? `"${contract.postTitle}" moved to awaiting delivery.`
-                            : `تم نقل العقد "${contract.postTitle}" إلى بانتظار التسليم.`,
-                        )
-                      }
-                    >
-                      {isEnglish ? 'Deliver work' : 'تسليم العمل'}
-                    </Button>
-                  ) : null}
-
-                  {contract.status === 'Awaiting Delivery' ? (
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        handleStatusChange(
-                          contract.id,
-                          'Completed',
-                          isEnglish
-                            ? `Completion of "${contract.postTitle}" was confirmed successfully.`
-                            : `تم تأكيد اكتمال العقد "${contract.postTitle}" بنجاح.`,
-                        )
-                      }
-                    >
-                      {isEnglish ? 'Confirm completion' : 'تأكيد الإكمال'}
-                    </Button>
-                  ) : null}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {loading ? <div className="h-56 animate-pulse rounded-lg bg-muted" /> : contracts.length === 0 ? (
+          <Card><CardContent className="py-12 text-center text-muted-foreground">{isEnglish ? 'No contracts yet.' : 'لا توجد عقود حتى الآن.'}</CardContent></Card>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2">
+            {contracts.map((contract) => {
+              const isClient = contract.client_id === user?.id;
+              const other = isClient ? contract.freelancer : contract.client;
+              return (
+                <Card key={contract.id}>
+                  <CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle>{contractTitle(contract, isEnglish)}</CardTitle><p className="mt-1 text-sm text-muted-foreground">{isEnglish ? 'With' : 'مع'} {other.name}</p></div><Badge variant="outline">{statusLabel(contract.status, isEnglish)}</Badge></div></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-2 text-sm sm:grid-cols-2"><p>{isEnglish ? 'Amount:' : 'المبلغ:'} {contract.amount}</p><p>{isEnglish ? 'Provider net:' : 'صافي مقدم الخدمة:'} {contract.freelancer_amount}</p></div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" disabled={busyId === contract.id} onClick={() => messageOtherParty(contract)}><MessageSquare className="me-2 size-4" />{isEnglish ? 'Message other party' : 'مراسلة الطرف الآخر'}</Button>
+                      {isClient && contract.status === 'pending' ? <Button disabled={busyId === contract.id} onClick={() => runAction(contract, 'start')}>{isEnglish ? 'Start contract' : 'بدء العقد'}</Button> : null}
+                      {isClient && ['funded', 'in_progress'].includes(contract.status) ? <Button disabled={busyId === contract.id} onClick={() => runAction(contract, 'complete')}>{isEnglish ? 'Confirm completion' : 'تأكيد الإكمال'}</Button> : null}
+                      {!['completed', 'canceled', 'refunded'].includes(contract.status) ? <Button variant="destructive" disabled={busyId === contract.id} onClick={() => runAction(contract, 'cancel')}>{isEnglish ? 'Cancel' : 'إلغاء'}</Button> : null}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );
+}
+
+export default function Contracts() {
+  return <ContractsPage />;
 }

@@ -17,6 +17,7 @@ const CompanySettings = lazyPage(() => import('@/app/pages/company/CompanySettin
 
 export const companyRoutes = [
   { path: '/company-dashboard', Component: CompanyDashboard },
+  { path: '/dashboard/company', Component: CompanyDashboard },
   { path: '/company/profile', Component: CompanyProfile },
   { path: '/company/jobs', Component: CompanyJobs },
   { path: '/company/services', Component: CompanyServices },

@@ -1,9 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Bell, Briefcase, Building2, MessageSquare, ShieldAlert, Wallet } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui';
+import { getApiErrorMessage } from '@/app/api/client';
+import { getNotifications } from '@/app/api/endpoints';
+
+interface ApiNotification {
+  id: number;
+  title?: string;
+  message?: string;
+  type?: string;
+  read_at?: string | null;
+  created_at?: string;
+}
 
 function getInitialNotifications(
   userType: 'user' | 'company' | 'admin',
@@ -126,6 +137,45 @@ export function NotificationsPage({ userType = 'user' }: { userType?: 'user' | '
   const { isEnglish, language } = useLanguage();
   const [notifications, setNotifications] = useState(() => getInitialNotifications(userType, isEnglish));
   const [statusMessage, setStatusMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    getNotifications<ApiNotification>()
+      .then((apiNotifications) => {
+        if (!mounted || apiNotifications.length === 0) {
+          return;
+        }
+
+        setNotifications(
+          apiNotifications.map((notification) => ({
+            id: notification.id,
+            title: notification.title || (isEnglish ? 'Notification' : 'إشعار'),
+            description: notification.message || '',
+            time: notification.created_at || '',
+            type: notification.type || 'notifications',
+            to:
+              userType === 'admin'
+                ? '/admin'
+                : userType === 'company'
+                  ? '/company-dashboard'
+                  : '/dashboard',
+            unread: !notification.read_at,
+          })),
+        );
+      })
+      .catch((error) => setStatusMessage(getApiErrorMessage(error)))
+      .finally(() => {
+        if (mounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [isEnglish, userType]);
 
   const unreadCount = useMemo(
     () => notifications.filter((notification) => notification.unread).length,
@@ -182,6 +232,14 @@ export function NotificationsPage({ userType = 'user' }: { userType?: 'user' | '
             {isEnglish ? 'Mark all as read' : 'تحديد الكل كمقروء'}
           </Button>
         </div>
+
+        {loading ? (
+          <Card>
+            <CardContent className="pt-6 text-sm text-muted-foreground">
+              {isEnglish ? 'Loading notifications...' : 'جار تحميل الإشعارات...'}
+            </CardContent>
+          </Card>
+        ) : null}
 
         {statusMessage && (
           <Card className="border-green-200 bg-green-50 p-3 text-sm text-green-700">

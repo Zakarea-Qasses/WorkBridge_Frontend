@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { AlertCircle, Briefcase, CheckCircle2, LoaderCircle, Mail, MapPin, Phone, User } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
-import { useLanguage } from '@/app/providers/LanguageProvider';
 import {
   Badge,
   Button,
@@ -9,509 +9,376 @@ import {
   CardHeader,
   CardTitle,
   Input,
-  Progress,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Separator,
+  Label,
   Textarea,
 } from '@/app/components/ui';
-import {
-  Award,
-  Briefcase,
-  Calendar,
-  CheckCircle2,
-  Mail,
-  MapPin,
-  Phone,
-  Star,
-  User,
-} from 'lucide-react';
-import { getAverageRatingFromReviews, getReviewsForProfile } from '@/app/storage';
-import { getCitiesByGovernorate, getLocationLabel, governorates } from '@/app/data/locationsData';
+import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
+import { getProfile, PersonalProfile, updateProfile } from '@/app/api/endpoints';
+import { useAuth } from '@/app/providers/AuthProvider';
+import { useLanguage } from '@/app/providers/LanguageProvider';
 
-const PROFILE_STORAGE_KEY = 'workbridge-user-profile';
-const defaultGovernorateId = 1;
-const defaultCityId = 101;
+interface ProfileDraft {
+  name: string;
+  job_title: string;
+  phone: string;
+  address: string;
+  description: string;
+  bio: string;
+  skills: string;
+}
 
-const defaultProfile = {
-  name: 'أحمد محمد',
-  title: 'مطور Full Stack',
-  rating: 4.9,
-  totalProjects: 45,
-  completionRate: 98,
-  email: 'ahmed@example.com',
-  phone: '+966 50 123 4567',
-  joinDate: 'يناير 2024',
-  verified: true,
-  bio: 'مطور Full Stack محترف مع خبرة 5 سنوات في بناء تطبيقات ويب حديثة باستخدام React وNode.js. متخصص في تطوير منصات التجارة الإلكترونية وأنظمة إدارة المحتوى.',
-  skills: ['React', 'Node.js', 'TypeScript', 'MongoDB', 'Express', 'Next.js', 'Tailwind CSS'],
-  experience: [
-    {
-      title: 'مطور Full Stack Senior',
-      company: 'شركة التقنية المتقدمة',
-      period: '2023 - حاليًا',
-      description: 'تطوير وإدارة منصات تجارة إلكترونية متعددة.',
-    },
-    {
-      title: 'مطور Full Stack',
-      company: 'وكالة الإبداع الرقمي',
-      period: '2021 - 2023',
-      description: 'بناء تطبيقات ويب للعملاء وإدارة المشاريع التقنية.',
-    },
-  ],
-  governorateId: defaultGovernorateId,
-  cityId: defaultCityId,
-};
-
-function getStoredProfile() {
-  if (typeof window === 'undefined') {
-    return defaultProfile;
-  }
-
-  const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-  if (!raw) {
-    return defaultProfile;
-  }
-
-  try {
-    return {
-      ...defaultProfile,
-      ...JSON.parse(raw),
-    };
-  } catch {
-    return defaultProfile;
-  }
+function createDraft(profile: PersonalProfile, name: string): ProfileDraft {
+  return {
+    name,
+    job_title: profile.job_title || '',
+    phone: profile.phone || '',
+    address: profile.address || '',
+    description: profile.description || '',
+    bio: profile.bio || '',
+    skills: profile.skills.map((skill) => skill.name).join(', '),
+  };
 }
 
 export default function Profile() {
   const { isEnglish, language } = useLanguage();
-  const [profile, setProfile] = useState(() => getStoredProfile());
-  const [isEditing, setIsEditing] = useState(false);
+  const { user, refreshUser } = useAuth();
+  const [profile, setProfile] = useState<PersonalProfile | null>(null);
+  const [draft, setDraft] = useState<ProfileDraft | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [statusMessage, setStatusMessage] = useState('');
-  const [draft, setDraft] = useState(() => ({
-    name: getStoredProfile().name,
-    title: getStoredProfile().title,
-    email: getStoredProfile().email,
-    phone: getStoredProfile().phone,
-    bio: getStoredProfile().bio,
-    skills: getStoredProfile().skills.join(', '),
-    governorateId: getStoredProfile().governorateId ?? defaultGovernorateId,
-    cityId: getStoredProfile().cityId ?? defaultCityId,
-  }));
-  const availableCities = useMemo(() => getCitiesByGovernorate(draft.governorateId), [draft.governorateId]);
-  const profileLocationLabel = getLocationLabel(profile.governorateId, profile.cityId);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const staticReviews = [
-    {
-      id: 1,
-      client: isEnglish ? 'Advanced Technology Company' : 'شركة التقنية المتقدمة',
-      rating: 5,
-      project: isEnglish ? 'E-commerce Website Development' : 'تطوير موقع تجارة إلكترونية',
-      comment: isEnglish
-        ? 'Excellent professional work, on-time delivery, and high quality execution.'
-        : 'عمل احترافي ممتاز، التزام بالمواعيد وجودة عالية في التنفيذ.',
-      date: '2026-02-20',
-      criteria: [],
-    },
-    {
-      id: 2,
-      client: isEnglish ? 'Success Foundation' : 'مؤسسة النجاح',
-      rating: 5,
-      project: isEnglish ? 'CMS Development' : 'تطوير نظام إدارة محتوى',
-      comment: isEnglish
-        ? 'Very professional developer, excellent communication, and results beyond expectations.'
-        : 'مطور محترف جدًا، التواصل ممتاز والنتيجة فاقت التوقعات.',
-      date: '2026-02-15',
-      criteria: [],
-    },
-  ];
+  useEffect(() => {
+    let mounted = true;
 
-  const dynamicReviews = getReviewsForProfile(profile.name).map((review) => ({
-    id: review.id,
-    client: review.reviewerName,
-    rating: review.rating,
-    project: review.project,
-    comment: review.comment,
-    date: review.date,
-    criteria: review.criteria,
-  }));
+    window.localStorage.removeItem('workbridge-user-profile');
+    setIsLoading(true);
+    getProfile()
+      .then((loadedProfile) => {
+        if (!mounted) {
+          return;
+        }
 
-  const reviews = [...dynamicReviews, ...staticReviews].sort((first, second) => second.date.localeCompare(first.date));
-  const visibleRating = getAverageRatingFromReviews(reviews, profile.rating);
+        setProfile(loadedProfile);
+        setDraft(createDraft(loadedProfile, user?.name || ''));
+        setStatusMessage('');
+      })
+      .catch((error) => {
+        if (mounted) {
+          setStatusMessage(getApiErrorMessage(error));
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      });
 
-  const handleStartEditing = () => {
-    setDraft({
-      name: profile.name,
-      title: profile.title,
-      email: profile.email,
-      phone: profile.phone,
-      bio: profile.bio,
-      skills: profile.skills.join(', '),
-      governorateId: profile.governorateId ?? defaultGovernorateId,
-      cityId: profile.cityId ?? defaultCityId,
-    });
-    setIsEditing(true);
-    setStatusMessage('');
-  };
+    return () => {
+      mounted = false;
+    };
+  }, [user?.name]);
 
-  const handleCancelEditing = () => {
-    setIsEditing(false);
-    setStatusMessage(isEnglish ? 'Changes were canceled.' : 'تم إلغاء التعديلات.');
-  };
-
-  const handleSaveProfile = () => {
-    if (!draft.name.trim() || !draft.title.trim() || !draft.email.trim()) {
-      setStatusMessage(
-        isEnglish
-          ? 'Complete the name, title, and email before saving.'
-          : 'أكمل الاسم والمسمى والبريد الإلكتروني قبل الحفظ.',
-      );
+  const startEditing = () => {
+    if (!profile) {
       return;
     }
 
-    const nextProfile = {
-      ...profile,
-      name: draft.name.trim(),
-      title: draft.title.trim(),
-      email: draft.email.trim(),
-      phone: draft.phone.trim(),
-      bio: draft.bio.trim(),
-      governorateId: draft.governorateId,
-      cityId: draft.cityId,
-      skills: draft.skills
-        .split(',')
-        .map((skill) => skill.trim())
-        .filter(Boolean),
-    };
-    setProfile(nextProfile);
-    setIsEditing(false);
-    setStatusMessage(isEnglish ? 'Profile updated successfully.' : 'تم تحديث الملف الشخصي بنجاح.');
+    setDraft(createDraft(profile, user?.name || ''));
+    setFieldErrors({});
+    setStatusMessage('');
+    setIsEditing(true);
+  };
 
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(nextProfile));
+  const saveProfile = async () => {
+    if (!draft?.name.trim()) {
+      setFieldErrors({ name: [isEnglish ? 'Name is required.' : 'الاسم مطلوب.'] });
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      setFieldErrors({});
+      setStatusMessage('');
+
+      const updatedProfile = await updateProfile({
+        name: draft.name.trim(),
+        job_title: draft.job_title.trim() || null,
+        phone: draft.phone.trim() || null,
+        address: draft.address.trim() || null,
+        description: draft.description.trim() || null,
+        bio: draft.bio.trim() || null,
+        skills: draft.skills
+          .split(',')
+          .map((skill) => skill.trim())
+          .filter(Boolean),
+      });
+
+      setProfile(updatedProfile);
+      await refreshUser();
+      setIsEditing(false);
+      setStatusMessage(isEnglish ? 'Profile updated successfully.' : 'تم تحديث الملف الشخصي بنجاح.');
+    } catch (error) {
+      setFieldErrors(getValidationErrors(error));
+      setStatusMessage(getApiErrorMessage(error));
+    } finally {
+      setIsSaving(false);
     }
   };
+
+  const displayedName = user?.name || draft?.name || '';
+  const joinedAt = profile?.created_at
+    ? new Intl.DateTimeFormat(isEnglish ? 'en' : 'ar', {
+        year: 'numeric',
+        month: 'long',
+      }).format(new Date(profile.created_at))
+    : null;
 
   return (
     <DashboardLayout>
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
-        {statusMessage ? (
-          <Card className="border-primary/20 bg-primary/5">
-            <CardContent className="pt-6 text-sm text-primary">{statusMessage}</CardContent>
+        {isLoading ? (
+          <div className="flex min-h-80 items-center justify-center">
+            <LoaderCircle className="size-8 animate-spin text-primary" />
+          </div>
+        ) : !profile || !draft ? (
+          <Card>
+            <CardContent className="flex items-center gap-3 pt-6 text-destructive">
+              <AlertCircle className="size-5 shrink-0" />
+              <p>{statusMessage || (isEnglish ? 'Profile could not be loaded.' : 'تعذر تحميل الملف الشخصي.')}</p>
+            </CardContent>
           </Card>
-        ) : null}
+        ) : (
+          <>
+            {statusMessage ? (
+              <Card className="border-primary/20 bg-primary/5">
+                <CardContent className="pt-6 text-sm text-primary">{statusMessage}</CardContent>
+              </Card>
+            ) : null}
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-start gap-6 md:flex-row">
-              <div className="flex size-32 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                <User className="size-16 text-primary" />
-              </div>
-              <div className="flex-1">
-                <div className="mb-4 flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    {isEditing ? (
-                      <div className="space-y-4">
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <Input
-                            value={draft.name}
-                            onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
-                            placeholder={isEnglish ? 'Name' : 'الاسم'}
-                          />
-                          <Input
-                            value={draft.title}
-                            onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
-                            placeholder={isEnglish ? 'Title' : 'المسمى'}
-                          />
-                        </div>
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <Select
-                            value={String(draft.governorateId)}
-                            onValueChange={(value) =>
-                              setDraft((current) => ({
-                                ...current,
-                                governorateId: Number(value),
-                                cityId: getCitiesByGovernorate(Number(value))[0]?.id ?? current.cityId,
-                              }))
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder={isEnglish ? 'Choose governorate' : 'اختر المحافظة'} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {governorates.map((governorate) => (
-                                <SelectItem key={governorate.id} value={String(governorate.id)}>
-                                  {governorate.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Select
-                            value={String(draft.cityId)}
-                            onValueChange={(value) => setDraft((current) => ({ ...current, cityId: Number(value) }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder={isEnglish ? 'Choose city' : 'اختر المدينة'} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableCities.map((city) => (
-                                <SelectItem key={city.id} value={String(city.id)}>
-                                  {city.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <Input
-                            value={draft.phone}
-                            onChange={(event) => setDraft((current) => ({ ...current, phone: event.target.value }))}
-                            placeholder={isEnglish ? 'Phone Number' : 'رقم الهاتف'}
-                          />
-                        </div>
-                        <Input
-                          value={draft.email}
-                          onChange={(event) => setDraft((current) => ({ ...current, email: event.target.value }))}
-                          placeholder={isEnglish ? 'Email' : 'البريد الإلكتروني'}
-                        />
-                        <Textarea
-                          rows={4}
-                          value={draft.bio}
-                          onChange={(event) => setDraft((current) => ({ ...current, bio: event.target.value }))}
-                          placeholder={isEnglish ? 'About You' : 'نبذة عنك'}
-                        />
-                        <Input
-                          value={draft.skills}
-                          onChange={(event) => setDraft((current) => ({ ...current, skills: event.target.value }))}
-                          placeholder={isEnglish ? 'Skills separated by commas' : 'المهارات مفصولة بفواصل'}
-                        />
-                      </div>
-                    ) : (
-                      <>
-                        <div className="mb-2 flex items-center gap-3">
-                          <h1 className="text-3xl font-bold">{profile.name}</h1>
-                          {profile.verified ? (
-                            <Badge className="bg-green-500">
-                              <CheckCircle2 className="ml-1 size-3" />
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex flex-col items-start gap-6 md:flex-row">
+                  <div className="flex size-28 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                    <User className="size-14 text-primary" />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <h1 className="text-2xl font-bold">{displayedName}</h1>
+                          {user?.email_verified_at ? (
+                            <Badge className="bg-green-600">
+                              <CheckCircle2 className="me-1 size-3" />
                               {isEnglish ? 'Verified' : 'موثق'}
                             </Badge>
                           ) : null}
                         </div>
-                        <p className="mb-3 text-xl text-muted-foreground">{profile.title}</p>
-                        <div className="mb-2 flex items-center gap-1">
-                          {[...Array(5)].map((_, index) => (
-                            <Star
-                              key={index}
-                              className={`size-5 ${
-                                index < Math.round(visibleRating)
-                                  ? 'fill-yellow-400 text-yellow-400'
-                                  : 'text-gray-300'
-                              }`}
-                            />
-                          ))}
-                          <span className="mr-2 font-semibold">{visibleRating}</span>
-                          <span className="text-muted-foreground">
-                            ({reviews.length} {isEnglish ? 'reviews' : 'تقييم'})
-                          </span>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                        <p className="mt-2 text-lg text-muted-foreground">
+                          {profile.job_title || (isEnglish ? 'No job title added' : 'لم تتم إضافة مسمى وظيفي')}
+                        </p>
+                      </div>
 
-                  <div className="flex shrink-0 gap-2">
-                    {isEditing ? (
-                      <>
-                        <Button variant="outline" onClick={handleCancelEditing}>
-                          {isEnglish ? 'Cancel' : 'إلغاء'}
+                      {!isEditing ? (
+                        <Button onClick={startEditing}>
+                          {isEnglish ? 'Edit Profile' : 'تعديل الملف الشخصي'}
                         </Button>
-                        <Button onClick={handleSaveProfile}>{isEnglish ? 'Save Changes' : 'حفظ التعديلات'}</Button>
-                      </>
-                    ) : (
-                      <Button onClick={handleStartEditing}>{isEnglish ? 'Edit Profile' : 'تعديل الملف الشخصي'}</Button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <MapPin className="size-4" />
-                    <span>{profileLocationLabel}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Mail className="size-4" />
-                    <span>{profile.email}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Phone className="size-4" />
-                    <span>{profile.phone}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="size-4" />
-                    <span>{isEnglish ? 'Member since' : 'عضو منذ'} {profile.joinDate}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-3">
-            <div className="grid gap-6 md:grid-cols-3">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm text-muted-foreground">{isEnglish ? 'Completed Projects' : 'المشاريع المكتملة'}</CardTitle>
-                  <Briefcase className="size-4 text-primary" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">{profile.totalProjects}</div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm text-muted-foreground">{isEnglish ? 'Completion Rate' : 'معدل الإنجاز'}</CardTitle>
-                  <Award className="size-4 text-green-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-green-600">{profile.completionRate}%</div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm text-muted-foreground">{isEnglish ? 'Rating' : 'التقييم'}</CardTitle>
-                  <Star className="size-4 text-yellow-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-yellow-600">{visibleRating}</div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          <div className="space-y-6 lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>{isEnglish ? 'About Me' : 'نبذة عني'}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="leading-relaxed text-muted-foreground">{profile.bio}</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>{isEnglish ? 'Work Experience' : 'الخبرات العملية'}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {profile.experience.map((item, index) => (
-                    <div key={item.title}>
-                      <div className="flex items-start gap-3">
-                        <div className="rounded-lg bg-primary/10 p-2">
-                          <Briefcase className="size-5 text-primary" />
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-semibold">{item.title}</h4>
-                          <p className="mb-1 text-sm text-muted-foreground">{item.company}</p>
-                          <p className="mb-2 text-xs text-muted-foreground">{item.period}</p>
-                          <p className="text-sm text-muted-foreground">{item.description}</p>
-                        </div>
-                      </div>
-                      {index < profile.experience.length - 1 ? <Separator className="mt-4" /> : null}
+                      ) : null}
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>{isEnglish ? 'Reviews & Ratings' : 'التقييمات والمراجعات'}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {reviews.map((review) => (
-                    <div key={review.id} className="rounded-lg border border-border p-4">
-                      <div className="mb-2 flex items-start justify-between">
-                        <div>
-                          <h4 className="font-semibold">{review.client}</h4>
-                          <p className="text-sm text-muted-foreground">{review.project}</p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Star className="size-4 fill-yellow-400 text-yellow-400" />
-                          <span className="font-semibold">{review.rating}</span>
-                        </div>
+                    <div className="mt-5 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
+                      <div className="flex items-center gap-2">
+                        <Mail className="size-4 shrink-0" />
+                        <span className="truncate">{user?.email}</span>
                       </div>
-                      <p className="mb-2 text-muted-foreground">{review.comment}</p>
-                      {review.criteria.length > 0 ? (
-                        <div className="mb-2 flex flex-wrap gap-2">
-                          {review.criteria.map((criterion) => (
-                            <Badge key={`${review.id}-${criterion.label}`} variant="outline">
-                              {criterion.label}: {criterion.value}/5
-                            </Badge>
-                          ))}
+                      <div className="flex items-center gap-2">
+                        <Phone className="size-4 shrink-0" />
+                        <span>{profile.phone || (isEnglish ? 'Not added' : 'غير مضاف')}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="size-4 shrink-0" />
+                        <span>{profile.address || (isEnglish ? 'Not added' : 'غير مضاف')}</span>
+                      </div>
+                      {joinedAt ? (
+                        <div className="flex items-center gap-2">
+                          <Briefcase className="size-4 shrink-0" />
+                          <span>{isEnglish ? `Joined ${joinedAt}` : `انضم في ${joinedAt}`}</span>
                         </div>
                       ) : null}
-                      <p className="text-xs text-muted-foreground">{review.date}</p>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{isEnglish ? 'Skills' : 'المهارات'}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {profile.skills.map((skill) => (
-                    <Badge key={skill} variant="secondary" className="text-sm">
-                      {skill}
-                    </Badge>
-                  ))}
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>{isEnglish ? 'Statistics' : 'الإحصائيات'}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">{isEnglish ? 'Completion Rate' : 'معدل الإنجاز'}</span>
-                    <span className="font-semibold">{profile.completionRate}%</span>
+            {isEditing ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{isEnglish ? 'Edit Profile' : 'تعديل الملف الشخصي'}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="profile-name">{isEnglish ? 'Name' : 'الاسم'}</Label>
+                      <Input
+                        id="profile-name"
+                        value={draft.name}
+                        onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                      />
+                      {fieldErrors.name?.[0] ? (
+                        <p className="text-xs text-destructive">{fieldErrors.name[0]}</p>
+                      ) : null}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="profile-title">{isEnglish ? 'Job title' : 'المسمى الوظيفي'}</Label>
+                      <Input
+                        id="profile-title"
+                        value={draft.job_title}
+                        onChange={(event) => setDraft({ ...draft, job_title: event.target.value })}
+                      />
+                      {fieldErrors.job_title?.[0] ? (
+                        <p className="text-xs text-destructive">{fieldErrors.job_title[0]}</p>
+                      ) : null}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="profile-phone">{isEnglish ? 'Phone' : 'رقم الهاتف'}</Label>
+                      <Input
+                        id="profile-phone"
+                        value={draft.phone}
+                        onChange={(event) => setDraft({ ...draft, phone: event.target.value })}
+                      />
+                      {fieldErrors.phone?.[0] ? (
+                        <p className="text-xs text-destructive">{fieldErrors.phone[0]}</p>
+                      ) : null}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="profile-address">{isEnglish ? 'Address' : 'العنوان'}</Label>
+                      <Input
+                        id="profile-address"
+                        value={draft.address}
+                        onChange={(event) => setDraft({ ...draft, address: event.target.value })}
+                      />
+                      {fieldErrors.address?.[0] ? (
+                        <p className="text-xs text-destructive">{fieldErrors.address[0]}</p>
+                      ) : null}
+                    </div>
                   </div>
-                  <Progress value={profile.completionRate} className="h-2" />
-                </div>
-                <Separator />
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">{isEnglish ? 'Response Rate' : 'معدل الاستجابة'}</span>
-                    <span className="font-semibold">95%</span>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="profile-description">{isEnglish ? 'Professional summary' : 'الملخص المهني'}</Label>
+                    <Textarea
+                      id="profile-description"
+                      rows={3}
+                      value={draft.description}
+                      onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+                    />
+                    {fieldErrors.description?.[0] ? (
+                      <p className="text-xs text-destructive">{fieldErrors.description[0]}</p>
+                    ) : null}
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">{isEnglish ? 'Response Time' : 'وقت الاستجابة'}</span>
-                    <span className="font-semibold">{isEnglish ? '1 hour' : 'ساعة واحدة'}</span>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="profile-bio">{isEnglish ? 'About you' : 'نبذة عنك'}</Label>
+                    <Textarea
+                      id="profile-bio"
+                      rows={4}
+                      value={draft.bio}
+                      onChange={(event) => setDraft({ ...draft, bio: event.target.value })}
+                    />
+                    {fieldErrors.bio?.[0] ? (
+                      <p className="text-xs text-destructive">{fieldErrors.bio[0]}</p>
+                    ) : null}
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">{isEnglish ? 'On-time Delivery' : 'التسليم في الوقت'}</span>
-                    <span className="font-semibold">97%</span>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="profile-skills">{isEnglish ? 'Skills' : 'المهارات'}</Label>
+                    <Input
+                      id="profile-skills"
+                      value={draft.skills}
+                      onChange={(event) => setDraft({ ...draft, skills: event.target.value })}
+                      placeholder={isEnglish ? 'React, TypeScript, UI Design' : 'React, TypeScript, تصميم واجهات'}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {isEnglish ? 'Separate skills with commas.' : 'افصل بين المهارات بفواصل.'}
+                    </p>
+                    {fieldErrors.skills?.[0] ? (
+                      <p className="text-xs text-destructive">{fieldErrors.skills[0]}</p>
+                    ) : null}
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+
+                  <div className="flex justify-end gap-3">
+                    <Button
+                      variant="outline"
+                      disabled={isSaving}
+                      onClick={() => {
+                        setDraft(createDraft(profile, user?.name || ''));
+                        setFieldErrors({});
+                        setStatusMessage('');
+                        setIsEditing(false);
+                      }}
+                    >
+                      {isEnglish ? 'Cancel' : 'إلغاء'}
+                    </Button>
+                    <Button disabled={isSaving} onClick={saveProfile}>
+                      {isSaving ? (
+                        <LoaderCircle className="me-2 size-4 animate-spin" />
+                      ) : null}
+                      {isSaving ? (isEnglish ? 'Saving...' : 'جار الحفظ...') : isEnglish ? 'Save Changes' : 'حفظ التعديلات'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-6 lg:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{isEnglish ? 'Professional Summary' : 'الملخص المهني'}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="whitespace-pre-wrap leading-7 text-muted-foreground">
+                      {profile.description || (isEnglish ? 'No professional summary added yet.' : 'لم تتم إضافة ملخص مهني بعد.')}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{isEnglish ? 'About Me' : 'نبذة عني'}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="whitespace-pre-wrap leading-7 text-muted-foreground">
+                      {profile.bio || (isEnglish ? 'No biography added yet.' : 'لم تتم إضافة نبذة بعد.')}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card className="lg:col-span-2">
+                  <CardHeader>
+                    <CardTitle>{isEnglish ? 'Skills' : 'المهارات'}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {profile.skills.length ? (
+                      <div className="flex flex-wrap gap-2">
+                        {profile.skills.map((skill) => (
+                          <Badge key={skill.id} variant="secondary">
+                            {skill.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground">
+                        {isEnglish ? 'No skills added yet.' : 'لم تتم إضافة مهارات بعد.'}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </DashboardLayout>
   );

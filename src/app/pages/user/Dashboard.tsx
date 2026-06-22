@@ -1,205 +1,183 @@
-import { Link } from 'react-router';
-import {
-  AlertCircle,
-  Briefcase,
-  CheckCircle2,
-  Clock,
-  Star,
-  TrendingUp,
-  Wallet,
-} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router';
+import { AlertCircle, Briefcase, RefreshCw, Star, TrendingUp } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
-import { PostCompletionReviewsSection } from '@/app/components/shared';
+import { Button, Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui';
+import { ApiError } from '@/app/api/client';
+import { getPersonalDashboard, PersonalDashboardResponse } from '@/app/api/endpoints';
+import { getDashboardPathForUser, useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui';
+
+function DashboardLoading() {
+  return (
+    <div className="space-y-6" aria-label="Loading dashboard">
+      <div className="h-32 animate-pulse rounded-lg bg-muted" />
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="h-44 animate-pulse rounded-lg bg-muted" />
+        <div className="h-44 animate-pulse rounded-lg bg-muted" />
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { isEnglish, language } = useLanguage();
+  const { user, initializing } = useAuth();
+  const [dashboard, setDashboard] = useState<PersonalDashboardResponse | null>(null);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const requestIdRef = useRef(0);
 
-  const stats = [
-    {
-      title: isEnglish ? 'Total Projects' : 'إجمالي المشاريع',
-      value: '24',
-      icon: Briefcase,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
-    },
-    {
-      title: isEnglish ? 'Active Projects' : 'المشاريع النشطة',
-      value: '8',
-      icon: TrendingUp,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
-    },
-    {
-      title: isEnglish ? 'Wallet Balance' : 'رصيد المحفظة',
-      value: '$15,750',
-      icon: Wallet,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
-    },
-    {
-      title: isEnglish ? 'Rating' : 'التقييم',
-      value: '4.8',
-      icon: Star,
-      color: 'text-yellow-600',
-      bgColor: 'bg-yellow-100',
-    },
-  ];
-
-  const recentProjects = [
-    {
-      id: 1,
-      title: isEnglish ? 'E-commerce Website Development' : 'تطوير موقع تجارة إلكترونية',
-      status: 'in-progress',
-      statusText: isEnglish ? 'In progress' : 'قيد التنفيذ',
-      budget: '$12,000',
-      deadline: isEnglish ? 'Within 15 days' : 'خلال 15 يوم',
-    },
-    {
-      id: 2,
-      title: isEnglish ? 'Mobile App Design' : 'تصميم تطبيق موبايل',
-      status: 'pending',
-      statusText: isEnglish ? 'Pending' : 'في الانتظار',
-      budget: '$8,500',
-      deadline: isEnglish ? 'Within 30 days' : 'خلال 30 يوم',
-    },
-    {
-      id: 3,
-      title: isEnglish ? 'Marketing Content Writing' : 'كتابة محتوى تسويقي',
-      status: 'completed',
-      statusText: isEnglish ? 'Completed' : 'مكتمل',
-      budget: '$3,000',
-      deadline: isEnglish ? '5 days ago' : 'منذ 5 أيام',
-    },
-  ];
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'bg-green-500';
-      case 'in-progress':
-        return 'bg-yellow-500';
-      case 'pending':
-        return 'bg-gray-500';
-      default:
-        return 'bg-gray-500';
+  const loadDashboard = useCallback(async () => {
+    if (initializing || user?.role !== 'personal') {
+      return;
     }
-  };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle2 className="size-4" />;
-      case 'in-progress':
-        return <Clock className="size-4" />;
-      default:
-        return <AlertCircle className="size-4" />;
+    const requestId = ++requestIdRef.current;
+    setIsLoading(true);
+    setErrorMessage('');
+
+    try {
+      const response = await getPersonalDashboard();
+      if (requestId !== requestIdRef.current) {
+        return;
+      }
+
+      setDashboard(response);
+    } catch (error) {
+      if (requestId !== requestIdRef.current) {
+        return;
+      }
+
+      setDashboard(null);
+
+      if (error instanceof ApiError && error.status === 403) {
+        setErrorMessage(
+          isEnglish
+            ? 'You do not have permission to access the personal dashboard.'
+            : 'ليس لديك صلاحية للوصول إلى لوحة التحكم الشخصية',
+        );
+        window.setTimeout(() => {
+          navigate(getDashboardPathForUser(user), { replace: true });
+        }, 1200);
+      } else if (error instanceof ApiError && error.status === 404) {
+        setErrorMessage(
+          isEnglish
+            ? 'The personal dashboard is currently unavailable.'
+            : 'لوحة التحكم الشخصية غير متاحة حاليًا',
+        );
+      } else {
+        setErrorMessage(
+          isEnglish
+            ? 'Unable to load dashboard data.'
+            : 'تعذر تحميل بيانات لوحة التحكم',
+        );
+      }
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
-  };
+  }, [initializing, isEnglish, navigate, user]);
+
+  useEffect(() => {
+    loadDashboard();
+
+    return () => {
+      requestIdRef.current += 1;
+    };
+  }, [loadDashboard]);
+
+  const displayedUser = dashboard?.user || user;
 
   return (
     <DashboardLayout>
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
-        <div className="rounded-lg bg-gradient-to-l from-blue-600 to-blue-800 p-6 text-white">
-          <h2 className="mb-2 text-2xl font-bold">
-            {isEnglish ? 'Welcome, Ahmad Mohammad' : 'مرحبًا، أحمد محمد'}
-          </h2>
-          <p className="text-blue-100">
-            {isEnglish ? 'Here is a summary of your activity on the platform.' : 'إليك ملخص نشاطك على المنصة'}
-          </p>
-        </div>
+        {isLoading ? <DashboardLoading /> : null}
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat) => (
-            <Card key={stat.title}>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm text-muted-foreground">{stat.title}</CardTitle>
-                <div className={`${stat.bgColor} rounded-lg p-2`}>
-                  <stat.icon className={`size-5 ${stat.color}`} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>{isEnglish ? 'Recent Projects' : 'المشاريع الأخيرة'}</CardTitle>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/projects">{isEnglish ? 'View all' : 'عرض الكل'}</Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentProjects.map((project) => (
-                <div
-                  key={project.id}
-                  className="flex items-center justify-between rounded-lg border border-border p-4 transition-colors hover:bg-accent/50"
-                >
-                  <div className="flex-1">
-                    <Link to={`/projects/${project.id}`} className="font-semibold hover:text-primary">
-                      {project.title}
-                    </Link>
-                    <div className="mt-2 flex items-center gap-4 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Wallet className="size-4" />
-                        {project.budget}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="size-4" />
-                        {project.deadline}
-                      </span>
-                    </div>
-                  </div>
-                  <Badge className={`${getStatusColor(project.status)} flex items-center gap-1`}>
-                    {getStatusIcon(project.status)}
-                    {project.statusText}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-6 md:grid-cols-2">
+        {!isLoading && errorMessage ? (
           <Card>
-            <CardHeader>
-              <CardTitle>{isEnglish ? 'Quick Actions' : 'إجراءات سريعة'}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button asChild variant="outline" className="w-full justify-start gap-2">
-                <Link to="/projects">
-                  <Briefcase className="size-5" />
-                  {isEnglish ? 'Browse available projects' : 'تصفح المشاريع المتاحة'}
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full justify-start gap-2">
-                <Link to="/services">
-                  <Star className="size-5" />
-                  {isEnglish ? 'Browse services' : 'تصفح الخدمات'}
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full justify-start gap-2">
-                <Link to="/jobs">
-                  <TrendingUp className="size-5" />
-                  {isEnglish ? 'Find a job' : 'البحث عن وظيفة'}
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full justify-start gap-2">
-                <Link to="/support">
-                  <AlertCircle className="size-5" />
-                  {isEnglish ? 'Support center' : 'مركز الدعم'}
-                </Link>
+            <CardContent className="flex min-h-64 flex-col items-center justify-center gap-4 text-center">
+              <AlertCircle className="size-10 text-destructive" />
+              <p className="text-lg font-medium">{errorMessage}</p>
+              <Button onClick={loadDashboard}>
+                <RefreshCw className="me-2 size-4" />
+                {isEnglish ? 'Try again' : 'إعادة المحاولة'}
               </Button>
             </CardContent>
           </Card>
-        </div>
+        ) : null}
 
-        <PostCompletionReviewsSection />
+        {!isLoading && dashboard ? (
+          <>
+            <div className="rounded-lg bg-gradient-to-l from-blue-600 to-blue-800 p-6 text-white">
+              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                <div>
+                  <h2 className="mb-2 text-2xl font-bold">
+                    {isEnglish
+                      ? `Welcome, ${displayedUser?.name || ''}`
+                      : `مرحبًا، ${displayedUser?.name || ''}`}
+                  </h2>
+                  <p className="text-blue-100">
+                    {isEnglish
+                      ? 'Your personal Work Bridge account is ready.'
+                      : dashboard.message}
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  title={isEnglish ? 'Refresh dashboard' : 'تحديث لوحة التحكم'}
+                  aria-label={isEnglish ? 'Refresh dashboard' : 'تحديث لوحة التحكم'}
+                  onClick={loadDashboard}
+                >
+                  <RefreshCw className="size-4" />
+                </Button>
+              </div>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{isEnglish ? 'Quick Actions' : 'إجراءات سريعة'}</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-2">
+                <Button asChild variant="outline" className="justify-start gap-2">
+                  <Link to="/projects">
+                    <Briefcase className="size-5" />
+                    {isEnglish ? 'Browse available projects' : 'تصفح المشاريع المتاحة'}
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="justify-start gap-2">
+                  <Link to="/services">
+                    <Star className="size-5" />
+                    {isEnglish ? 'Browse services' : 'تصفح الخدمات'}
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="justify-start gap-2">
+                  <Link to="/jobs">
+                    <TrendingUp className="size-5" />
+                    {isEnglish ? 'Find a job' : 'البحث عن وظيفة'}
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="justify-start gap-2">
+                  <Link to="/support">
+                    <AlertCircle className="size-5" />
+                    {isEnglish ? 'Support center' : 'مركز الدعم'}
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                {isEnglish
+                  ? 'Dashboard statistics and recent activity are not provided by the backend yet.'
+                  : 'لا تتوفر إحصائيات أو أنشطة حديثة من الخادم حتى الآن.'}
+              </CardContent>
+            </Card>
+          </>
+        ) : null}
       </div>
     </DashboardLayout>
   );

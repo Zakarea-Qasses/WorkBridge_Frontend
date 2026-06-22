@@ -26,15 +26,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/app/components/ui';
-import { jobs } from '@/app/data';
+import { jobs as fallbackJobs } from '@/app/data';
 import {
   addCompanyApplicant,
   createContentReport,
   getAppliedJobIds,
   setAppliedJobIds as persistAppliedJobIds,
 } from '@/app/storage';
+import { getApiErrorMessage } from '@/app/api/client';
+import { getJobs as getApiJobs } from '@/app/api/endpoints';
 
 const JOBS_PER_PAGE = 3;
+
+interface ApiJob {
+  id: number;
+  title: string;
+  description: string;
+  location_type?: string | null;
+  salary?: number | string | null;
+  created_at?: string;
+  company?: { company_name?: string };
+  city?: { name?: string };
+}
 
 const locationLabelMap: Record<string, { ar: string; en: string }> = {
   الرياض: { ar: 'الرياض', en: 'Riyadh' },
@@ -58,10 +71,54 @@ export default function Jobs() {
   const [currentPage, setCurrentPage] = useState(1);
   const [appliedJobIds, setAppliedJobIds] = useState<number[]>([]);
   const [statusMessage, setStatusMessage] = useState('');
+  const [jobs, setJobs] = useState(fallbackJobs);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     setAppliedJobIds(getAppliedJobIds());
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    getApiJobs<ApiJob>()
+      .then((apiJobs) => {
+        if (!mounted) {
+          return;
+        }
+
+        setJobs(
+          apiJobs.map((job) => ({
+            id: job.id,
+            title: job.title,
+            company: job.company?.company_name || (isEnglish ? 'Company' : 'شركة'),
+            location: job.city?.name || (job.location_type === 'remote' ? 'Ø¹Ù† Ø¨Ø¹Ø¯' : ''),
+            type: job.location_type === 'remote' ? 'Ø¹Ù† Ø¨Ø¹Ø¯' : 'Ø¯ÙˆØ§Ù… ÙƒØ§Ù…Ù„',
+            salary: job.salary ? `$${job.salary}` : (isEnglish ? 'Not specified' : 'غير محدد'),
+            description: job.description,
+            requirements: [],
+            postedTime: job.created_at || new Date().toISOString(),
+            verified: true,
+          })),
+        );
+      })
+      .catch((error) => {
+        if (mounted) {
+          setErrorMessage(getApiErrorMessage(error));
+          setJobs(fallbackJobs);
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [isEnglish]);
 
   const filteredJobs = useMemo(
     () =>
@@ -196,6 +253,20 @@ export default function Jobs() {
             </Button>
           </div>
         </div>
+
+        {loading ? (
+          <Card>
+            <CardContent className="pt-6 text-sm text-muted-foreground">
+              {isEnglish ? 'Loading jobs...' : 'جار تحميل الوظائف...'}
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {errorMessage ? (
+          <Card className="border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            {errorMessage}
+          </Card>
+        ) : null}
 
         {statusMessage && (
           <Card className="border-green-200 bg-green-50 p-3 text-sm text-green-700">

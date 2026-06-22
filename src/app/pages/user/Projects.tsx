@@ -32,22 +32,77 @@ import {
   getDisplayDurationLabel,
   getDisplayRelativeTimeLabel,
 } from '@/app/data';
-import { createContentReport, getProjects } from '@/app/storage';
+import { createContentReport, getProjects as getStoredProjects } from '@/app/storage';
+import { getApiErrorMessage } from '@/app/api/client';
+import { getProjects as getApiProjects } from '@/app/api/endpoints';
 
 const PROJECTS_PER_PAGE = 4;
 
+interface ApiProject {
+  id: number;
+  title: string;
+  description: string;
+  budget?: number | string;
+  duration_days?: number;
+  created_at?: string;
+  category?: { name: string };
+  user?: { name: string };
+  skills?: { name: string }[];
+}
+
 export default function Projects() {
   const { isEnglish, language } = useLanguage();
-  const [projects, setProjects] = useState(() => getProjects());
+  const [projects, setProjects] = useState(() => getStoredProjects());
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedBudget, setSelectedBudget] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [statusMessage, setStatusMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
-    setProjects(getProjects());
-  }, []);
+    let mounted = true;
+
+    getApiProjects<ApiProject>()
+      .then((apiProjects) => {
+        if (!mounted) {
+          return;
+        }
+
+        setProjects(
+          apiProjects.map((project) => ({
+            id: project.id,
+            title: project.title,
+            description: project.description,
+            budget: `$${project.budget ?? 0}`,
+            budgetValue: Number(project.budget ?? 0),
+            category: project.category?.name || 'General',
+            duration: `${project.duration_days ?? 1} ${isEnglish ? 'days' : 'أيام'}`,
+            client: project.user?.name || (isEnglish ? 'Client' : 'عميل'),
+            postedTime: project.created_at || new Date().toISOString(),
+            proposals: 0,
+            featured: false,
+            skills: project.skills?.map((skill) => skill.name) || [],
+          })),
+        );
+      })
+      .catch((error) => {
+        if (mounted) {
+          setErrorMessage(getApiErrorMessage(error));
+          setProjects(getStoredProjects());
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [isEnglish]);
 
   const filteredProjects = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -146,6 +201,20 @@ export default function Projects() {
             </Button>
           </div>
         </section>
+
+        {loading ? (
+          <Card>
+            <CardContent className="pt-6 text-sm text-muted-foreground">
+              {isEnglish ? 'Loading projects...' : 'جار تحميل المشاريع...'}
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {errorMessage ? (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardContent className="pt-6 text-sm text-amber-800">{errorMessage}</CardContent>
+          </Card>
+        ) : null}
 
         {statusMessage ? (
           <Card className="border-amber-200 bg-amber-50">

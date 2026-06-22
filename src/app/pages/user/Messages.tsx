@@ -1,633 +1,221 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
-import {
-  AlertTriangle,
-  ArrowRight,
-  Circle,
-  MoreVertical,
-  Search,
-  Send,
-  ShieldAlert,
-  User,
-} from 'lucide-react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
+import { LoaderCircle, MessageSquare, RefreshCw, Search, Send, User } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
-import { useLanguage } from '@/app/providers/LanguageProvider';
-import { Badge, Button, Card, Input, ScrollArea } from '@/app/components/ui';
+import { Badge, Button, Card, CardContent, Input, ScrollArea } from '@/app/components/ui';
 import {
-  getMessagingData,
-  reportConversationMessage,
+  getConversationMessages,
+  getConversations,
+  markConversationAsRead,
   sendConversationMessage,
-} from '@/app/storage';
-
-const REPORT_REASON = 'Inappropriate or abusive content';
-const MESSAGES_CONSENT_KEY_PREFIX = 'workbridge-messages-consent';
-
-function getConsentKey(userType: 'user' | 'company' | 'admin') {
-  return `${MESSAGES_CONSENT_KEY_PREFIX}-${userType}`;
-}
-
-function hasAcceptedMessagesPolicy(userType: 'user' | 'company' | 'admin') {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
-  return window.localStorage.getItem(getConsentKey(userType)) === 'accepted';
-}
-
-function acceptMessagesPolicy(userType: 'user' | 'company' | 'admin') {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.setItem(getConsentKey(userType), 'accepted');
-}
-
-function getViewerMessageSender(
-  sender: 'me' | 'other',
-  userType: 'user' | 'company' | 'admin',
-) {
-  if (userType === 'company') {
-    return sender === 'me' ? 'other' : 'me';
-  }
-
-  return sender;
-}
-
-function getMessageOwnerLabel(
-  sender: 'me' | 'other',
-  userType: 'user' | 'company' | 'admin',
-  isEnglish: boolean,
-) {
-  const viewerSender = getViewerMessageSender(sender, userType);
-
-  if (viewerSender === 'me') {
-    if (isEnglish) {
-      return userType === 'company'
-        ? 'You - Company'
-        : userType === 'admin'
-          ? 'Admin'
-          : 'You';
-    }
-
-    return userType === 'company' ? 'أنتِ - الشركة' : userType === 'admin' ? 'الأدمن' : 'أنت';
-  }
-
-  return isEnglish ? 'Other party' : 'الطرف الآخر';
-}
+  type Conversation,
+  type ConversationMessage,
+} from '@/app/api/endpoints';
+import { useAuth } from '@/app/providers/AuthProvider';
+import { useLanguage } from '@/app/providers/LanguageProvider';
 
 export function MessagesPage({
   userType = 'user',
 }: {
   userType?: 'user' | 'company' | 'admin';
 }) {
-  const { language, isEnglish } = useLanguage();
-  const isAdminView = userType === 'admin';
-  const [selectedChat, setSelectedChat] = useState(1);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [newMessage, setNewMessage] = useState('');
-  const [statusMessage, setStatusMessage] = useState('');
-  const [isChatOpenOnMobile, setIsChatOpenOnMobile] = useState(false);
-  const [hasAcceptedPolicy, setHasAcceptedPolicy] = useState(false);
-  const [mutedConversationIds, setMutedConversationIds] = useState<number[]>([]);
-  const [isConversationMenuOpen, setIsConversationMenuOpen] = useState(false);
-  const [messagingData, setMessagingData] = useState(getMessagingData());
+  const { user } = useAuth();
+  const { isEnglish, language } = useLanguage();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [search, setSearch] = useState('');
+  const [draft, setDraft] = useState('');
+  const [loadingConversations, setLoadingConversations] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
-  const moderationPageLink = '/admin/reports';
-  const viewerProfileState =
-    userType === 'company'
-      ? { viewerType: 'company' as const, returnTo: '/company/messages' }
-      : userType === 'admin'
-        ? { viewerType: 'admin' as const, returnTo: '/admin/messages' }
-        : { viewerType: 'user' as const, returnTo: '/messages' };
+  const loadConversations = useCallback(async () => {
+    if (userType === 'admin') {
+      setLoadingConversations(false);
+      return;
+    }
 
-  const text = {
-    consentTitle: isEnglish ? 'Consent to use messaging' : 'الموافقة على استخدام المحادثات',
-    consentBody: isEnglish
-      ? 'By using messaging, you agree that communication is for professional work only, and messages may be reviewed when there is a report, dispute, or legal obligation.'
-      : 'باستخدامك للمحادثات فأنت توافق أن التواصل مخصص للعمل المهني فقط، وقد تتم مراجعة الرسائل عند وجود بلاغ أو نزاع أو التزام قانوني.',
-    acceptAndContinue: isEnglish ? 'Accept and continue' : 'أوافق وأتابع',
-    adminNoticeTitle: isEnglish ? 'Admin view notice' : 'تنبيه واجهة الأدمن',
-    adminNoticeBody: isEnglish
-      ? 'This view is intended for administrative follow-up only. The admin reviews and monitors conversations here without acting as a regular participant.'
-      : 'هذه الواجهة مخصصة لمتابعة محادثات المنصة عند الحاجة الإدارية فقط. الأدمن هنا يراجع ويتابع، ولا يستخدم منطق الإبلاغ كطرف عادي داخل الحوار.',
-    privacyNoticeTitle: isEnglish
-      ? 'Privacy and review notice'
-      : 'تنبيه الخصوصية والمراجعة',
-    privacyNoticeBody: isEnglish
-      ? 'Messaging on the platform is intended for professional communication and may only be reviewed when there is a report, dispute, or legal obligation.'
-      : 'المحادثات داخل المنصة مخصصة للتواصل المهني، وقد تخضع للمراجعة فقط عند وجود بلاغ أو نزاع أو التزام قانوني.',
-    messageSent: isEnglish ? 'The message was sent in the interface.' : 'تم إرسال الرسالة داخل الواجهة.',
-    reportSent: isEnglish
-      ? 'The report was sent to the admin reports center.'
-      : 'تم إرسال البلاغ إلى مركز التقارير لدى الأدمن.',
-    consentSaved: isEnglish
-      ? 'Your messaging-policy approval has been saved.'
-      : 'تم حفظ موافقتك على سياسة استخدام المحادثات.',
-    muted: isEnglish
-      ? 'Notifications were muted for this conversation.'
-      : 'تم كتم إشعارات هذه المحادثة.',
-    unmuted: isEnglish
-      ? 'Notifications were unmuted for this conversation.'
-      : 'تم إلغاء كتم إشعارات هذه المحادثة.',
-    noReportableMessage: isEnglish
-      ? 'There is no suitable message to report in this conversation.'
-      : 'لا توجد رسالة مناسبة للإبلاغ داخل هذه المحادثة.',
-    generalConversationReport: isEnglish
-      ? 'General report about the conversation'
-      : 'بلاغ عام على المحادثة',
-    conversationDetails: (name: string, project: string) =>
-      isEnglish
-        ? `The current conversation with ${name} is linked to ${project}.`
-        : `المحادثة الحالية مع ${name} مرتبطة بـ ${project}.`,
-    searchPlaceholder: isEnglish ? 'Search by person name...' : 'ابحث باسم الشخص...',
-    noSearchResults: isEnglish ? 'No matching results were found.' : 'لا توجد نتيجة مطابقة لهذا الاسم.',
-    conversationOptions: isEnglish ? 'Conversation options' : 'خيارات المحادثة',
-    showDetails: isEnglish ? 'Show conversation details' : 'عرض تفاصيل المحادثة',
-    unmuteNotifications: isEnglish ? 'Unmute notifications' : 'إلغاء كتم الإشعارات',
-    muteNotifications: isEnglish ? 'Mute notifications' : 'كتم الإشعارات',
-    reportConversation: isEnglish ? 'Report conversation' : 'الإبلاغ عن المحادثة',
-    reported: isEnglish ? 'Reported' : 'تم الإبلاغ',
-    report: isEnglish ? 'Report' : 'إبلاغ',
-    noMessagesYet: isEnglish ? 'There are no messages in this conversation yet.' : 'لا توجد رسائل في هذه المحادثة بعد.',
-    reportCenterIntro: isEnglish
-      ? 'When you submit a report, it is sent to the admin'
-      : 'عند تقديم بلاغ، يتم إرساله إلى صفحة',
-    reportCenterLink: isEnglish ? 'Reports Center' : 'مركز التقارير',
-    reportCenterEnd: isEnglish ? 'page.' : 'الخاصة بالأدمن.',
-    adminMessageHint: isEnglish
-      ? 'This conversation is visible to the admin for follow-up and review only, not for using report or conversation-management actions as a regular participant.'
-      : 'هذه المحادثة ظاهرة للأدمن بغرض المتابعة والمراجعة فقط، وليس لاستخدام أزرار الإبلاغ كطرف عادي.',
-    sensitiveDataHint: isEnglish
-      ? 'Do not share sensitive information in the conversation unless necessary.'
-      : 'لا تشارك بيانات حساسة داخل المحادثة إلا عند الحاجة.',
-    writeMessage: isEnglish ? 'Write your message...' : 'اكتب رسالتك...',
-    noConversationSelected: isEnglish ? 'No conversation selected.' : 'لا توجد محادثة محددة.',
-  };
+    setLoadingConversations(true);
+    setError('');
+    try {
+      const items = await getConversations();
+      setConversations(items);
+      const requestedId = Number(searchParams.get('conversation'));
+      const nextId =
+        items.find((item) => item.id === requestedId)?.id ||
+        items.find((item) => item.id === selectedId)?.id ||
+        items[0]?.id ||
+        null;
+      setSelectedId(nextId);
+    } catch {
+      setError(isEnglish ? 'Unable to load conversations.' : 'تعذر تحميل المحادثات');
+    } finally {
+      setLoadingConversations(false);
+    }
+  }, [isEnglish, searchParams, selectedId, userType]);
 
   useEffect(() => {
-    setMessagingData(getMessagingData());
-    setHasAcceptedPolicy(hasAcceptedMessagesPolicy(userType));
-  }, [userType]);
+    loadConversations();
+  }, [loadConversations]);
+
+  useEffect(() => {
+    if (!selectedId || userType === 'admin') {
+      setMessages([]);
+      return;
+    }
+
+    let mounted = true;
+    setLoadingMessages(true);
+    setError('');
+    getConversationMessages(selectedId)
+      .then((items) => {
+        if (mounted) {
+          setMessages(items);
+          markConversationAsRead(selectedId).catch(() => undefined);
+          setConversations((current) =>
+            current.map((item) => item.id === selectedId ? { ...item, unread_count: 0 } : item),
+          );
+        }
+      })
+      .catch(() => {
+        if (mounted) setError(isEnglish ? 'Unable to load messages.' : 'تعذر تحميل الرسائل');
+      })
+      .finally(() => {
+        if (mounted) setLoadingMessages(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [isEnglish, selectedId, userType]);
 
   const filteredConversations = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-
-    if (!normalizedSearch) {
-      return messagingData.conversations;
-    }
-
-    return messagingData.conversations.filter(
-      (conversation) => conversation.name.toLowerCase().includes(normalizedSearch),
-    );
-  }, [messagingData.conversations, searchTerm]);
-
-  const activeConversation =
-    messagingData.conversations.find((conversation) => conversation.id === selectedChat) ??
-    messagingData.conversations[0];
-
-  const currentMessages = useMemo(() => {
-    if (!activeConversation) {
-      return [];
-    }
-
-    return messagingData.messages.filter(
-      (message) => message.conversationId === activeConversation.id,
-    );
-  }, [activeConversation, messagingData.messages]);
-
-  const handleSelectConversation = (conversationId: number) => {
-    setSelectedChat(conversationId);
-    setIsChatOpenOnMobile(true);
-    setIsConversationMenuOpen(false);
-    setStatusMessage('');
-  };
-
-  const handleSendMessage = () => {
-    const trimmed = newMessage.trim();
-    if (!activeConversation || !trimmed) {
-      return;
-    }
-
-    const nextData = sendConversationMessage(activeConversation.id, trimmed, userType);
-    setMessagingData(nextData);
-    setNewMessage('');
-    setStatusMessage(text.messageSent);
-  };
-
-  const handleReportMessage = (messageId: number) => {
-    if (!activeConversation || isAdminView) {
-      return;
-    }
-
-    const nextData = reportConversationMessage(activeConversation.id, messageId, REPORT_REASON);
-    setMessagingData(nextData);
-    setStatusMessage(text.reportSent);
-  };
-
-  const handleAcceptPolicy = () => {
-    acceptMessagesPolicy(userType);
-    setHasAcceptedPolicy(true);
-    setStatusMessage(text.consentSaved);
-  };
-
-  const handleMuteConversation = () => {
-    if (!activeConversation || isAdminView) {
-      return;
-    }
-
-    setIsConversationMenuOpen(false);
-    setMutedConversationIds((current) => {
-      const isMuted = current.includes(activeConversation.id);
-      const nextIds = isMuted
-        ? current.filter((id) => id !== activeConversation.id)
-        : [...current, activeConversation.id];
-
-      setStatusMessage(isMuted ? text.unmuted : text.muted);
-
-      return nextIds;
+    const term = search.trim().toLowerCase();
+    return conversations.filter((conversation) => {
+      const other = conversation.user1_id === user?.id ? conversation.user2 : conversation.user1;
+      return !term || other.name.toLowerCase().includes(term);
     });
+  }, [conversations, search, user?.id]);
+
+  const selectedConversation = conversations.find((item) => item.id === selectedId) || null;
+  const otherUser = selectedConversation
+    ? selectedConversation.user1_id === user?.id
+      ? selectedConversation.user2
+      : selectedConversation.user1
+    : null;
+
+  const selectConversation = (id: number) => {
+    setSelectedId(id);
+    setSearchParams({ conversation: String(id) });
   };
 
-  const handleReportConversation = () => {
-    if (!activeConversation || isAdminView) {
-      return;
+  const submitMessage = async (event: FormEvent) => {
+    event.preventDefault();
+    const content = draft.trim();
+    if (!selectedId || !content || sending) return;
+
+    try {
+      setSending(true);
+      setError('');
+      const sent = await sendConversationMessage(selectedId, content);
+      setMessages((current) => [...current, sent]);
+      setDraft('');
+      setConversations((current) =>
+        current.map((item) =>
+          item.id === selectedId
+            ? { ...item, messages: [sent], last_message_at: sent.created_at }
+            : item,
+        ),
+      );
+    } catch {
+      setError(isEnglish ? 'The message could not be sent.' : 'تعذر إرسال الرسالة');
+    } finally {
+      setSending(false);
     }
+  };
 
-    setIsConversationMenuOpen(false);
-
-    const reportableMessage = [...currentMessages]
-      .reverse()
-      .find((message) => getViewerMessageSender(message.sender, userType) === 'other');
-
-    if (!reportableMessage) {
-      setStatusMessage(text.noReportableMessage);
-      return;
-    }
-
-    const nextData = reportConversationMessage(
-      activeConversation.id,
-      reportableMessage.id,
-      text.generalConversationReport,
+  if (userType === 'admin') {
+    return (
+      <DashboardLayout userType="admin">
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            {isEnglish
+              ? 'The backend does not currently provide an endpoint for admins to monitor all conversations.'
+              : 'لا يوفر الخادم حاليًا مسارًا للأدمن لعرض جميع المحادثات.'}
+          </CardContent>
+        </Card>
+      </DashboardLayout>
     );
-    setMessagingData(nextData);
-    setStatusMessage(text.reportSent);
-  };
-
-  const handleShowConversationDetails = () => {
-    if (!activeConversation) {
-      return;
-    }
-
-    setIsConversationMenuOpen(false);
-    setStatusMessage(text.conversationDetails(activeConversation.name, activeConversation.project));
-  };
+  }
 
   return (
     <DashboardLayout userType={userType}>
       <div className="space-y-4" dir={language === 'en' ? 'ltr' : 'rtl'}>
-        {!isAdminView && !hasAcceptedPolicy && (
-          <Card className="border-blue-200 bg-blue-50 p-4">
-            <div className="space-y-4">
-              <div className="flex items-start gap-3">
-                <ShieldAlert className="mt-0.5 size-5 text-blue-700" />
-                <div className="space-y-1 text-sm text-blue-900">
-                  <p className="font-semibold">{text.consentTitle}</p>
-                  <p>{text.consentBody}</p>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold">{isEnglish ? 'Messages' : 'المحادثات'}</h1>
+          <Button variant="outline" size="icon" onClick={loadConversations} title={isEnglish ? 'Refresh' : 'تحديث'}>
+            <RefreshCw className="size-4" />
+          </Button>
+        </div>
+
+        {error ? <Card className="border-destructive/30"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card> : null}
+
+        <Card className="h-[calc(100vh-15rem)] min-h-[480px] overflow-hidden">
+          <div className="grid h-full min-h-0 md:grid-cols-[320px_1fr]">
+            <div className="flex min-h-0 flex-col border-e">
+              <div className="p-3">
+                <div className="relative">
+                  <Search className="absolute end-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input value={search} onChange={(event) => setSearch(event.target.value)} className="pe-10" placeholder={isEnglish ? 'Search conversations...' : 'ابحث في المحادثات...'} />
                 </div>
               </div>
-              <Button onClick={handleAcceptPolicy}>{text.acceptAndContinue}</Button>
+              <ScrollArea className="min-h-0 flex-1">
+                {loadingConversations ? (
+                  <div className="flex justify-center p-8"><LoaderCircle className="size-6 animate-spin" /></div>
+                ) : filteredConversations.length === 0 ? (
+                  <div className="p-8 text-center text-sm text-muted-foreground">{isEnglish ? 'No conversations yet.' : 'لا توجد محادثات حتى الآن.'}</div>
+                ) : filteredConversations.map((conversation) => {
+                  const other = conversation.user1_id === user?.id ? conversation.user2 : conversation.user1;
+                  const latest = conversation.messages?.[0];
+                  return (
+                    <button key={conversation.id} type="button" onClick={() => selectConversation(conversation.id)} className={`w-full border-b p-4 text-start hover:bg-accent ${selectedId === conversation.id ? 'bg-accent' : ''}`}>
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10"><User className="size-5 text-primary" /></div>
+                        <div className="min-w-0 flex-1"><p className="truncate font-medium">{other.name}</p><p className="truncate text-xs text-muted-foreground">{latest?.content || (isEnglish ? 'No messages yet' : 'لا توجد رسائل بعد')}</p></div>
+                        {conversation.unread_count ? <Badge>{conversation.unread_count}</Badge> : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </ScrollArea>
             </div>
-          </Card>
-        )}
 
-        <Card className="border-amber-200 bg-amber-50 p-4">
-          <div className="flex items-start gap-3">
-            <ShieldAlert className="mt-0.5 size-5 text-amber-600" />
-            <div className="space-y-1 text-sm">
-              {isAdminView ? (
-                <>
-                  <p className="font-semibold text-amber-900">{text.adminNoticeTitle}</p>
-                  <p className="text-amber-800">{text.adminNoticeBody}</p>
-                </>
+            <div className="flex min-h-0 flex-col">
+              {!selectedConversation ? (
+                <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground"><MessageSquare className="size-10" /><p>{isEnglish ? 'Select a conversation.' : 'اختر محادثة.'}</p></div>
               ) : (
                 <>
-                  <p className="font-semibold text-amber-900">{text.privacyNoticeTitle}</p>
-                  <p className="text-amber-800">{text.privacyNoticeBody}</p>
+                  <div className="border-b p-4"><h2 className="font-semibold">{otherUser?.name}</h2></div>
+                  <ScrollArea className="min-h-0 flex-1 bg-muted/30 p-4">
+                    {loadingMessages ? <div className="flex justify-center p-8"><LoaderCircle className="size-6 animate-spin" /></div> : messages.length === 0 ? (
+                      <div className="p-8 text-center text-sm text-muted-foreground">{isEnglish ? 'Start the conversation with a message.' : 'ابدأ المحادثة بإرسال رسالة.'}</div>
+                    ) : <div className="space-y-3">{messages.map((message) => {
+                      const mine = message.sender_id === user?.id;
+                      return <div key={message.id} className={`flex ${mine ? 'justify-start' : 'justify-end'}`}><div className={`max-w-[80%] rounded-lg px-4 py-2 text-sm ${mine ? 'bg-primary text-primary-foreground' : 'border bg-white'}`}><p className="whitespace-pre-wrap">{message.content}</p><p className="mt-1 text-[10px] opacity-70">{new Date(message.created_at).toLocaleTimeString(isEnglish ? 'en' : 'ar', { hour: '2-digit', minute: '2-digit' })}</p></div></div>;
+                    })}</div>}
+                  </ScrollArea>
+                  <form onSubmit={submitMessage} className="flex gap-2 border-t p-3">
+                    <Input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={isEnglish ? 'Write a message...' : 'اكتب رسالة...'} disabled={sending} />
+                    <Button type="submit" size="icon" disabled={sending || !draft.trim()} title={isEnglish ? 'Send' : 'إرسال'}>{sending ? <LoaderCircle className="size-4 animate-spin" /> : <Send className="size-4" />}</Button>
+                  </form>
                 </>
               )}
             </div>
           </div>
         </Card>
-
-        {statusMessage && (
-          <Card className="border-green-200 bg-green-50 p-3 text-sm text-green-700">
-            {statusMessage}
-          </Card>
-        )}
-
-        <div className="h-[calc(100vh-16rem)] min-h-0">
-          <Card className="h-full overflow-hidden">
-            <div className="flex h-full min-h-0">
-              <div
-                className={`${
-                  isChatOpenOnMobile ? 'hidden md:flex' : 'flex'
-                } w-full min-h-0 flex-col border-l border-border md:w-96`}
-              >
-                <div className="border-b border-border p-4">
-                  <div className="relative">
-                    <Search className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      placeholder={text.searchPlaceholder}
-                      value={searchTerm}
-                      onChange={(event) => setSearchTerm(event.target.value)}
-                      className="bg-input-background pr-10"
-                    />
-                  </div>
-                </div>
-
-                <ScrollArea className="flex-1 min-h-0">
-                  {filteredConversations.length > 0 ? (
-                    filteredConversations.map((conversation) => (
-                      <button
-                        key={conversation.id}
-                        type="button"
-                        onClick={() => handleSelectConversation(conversation.id)}
-                        className={`w-full cursor-pointer border-b border-border px-4 py-4 text-right transition-colors hover:bg-accent ${
-                          selectedChat === conversation.id ? 'bg-accent/80' : ''
-                        }`}
-                        title={conversation.name}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="relative shrink-0">
-                            <div className="flex size-12 items-center justify-center rounded-full bg-primary/10">
-                              <User className="size-6 text-primary" />
-                            </div>
-                            {conversation.online && (
-                              <Circle className="absolute bottom-0 left-0 size-3 fill-green-500 text-green-500" />
-                            )}
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start gap-3">
-                              <div className="min-w-0 flex-1">
-                                <h4 className="truncate text-base font-semibold leading-6 text-foreground">
-                                  <Link
-                                    to={conversation.profilePath}
-                                    state={viewerProfileState}
-                                    onClick={(event) => event.stopPropagation()}
-                                    className="hover:text-primary hover:underline"
-                                  >
-                                    {conversation.name}
-                                  </Link>
-                                </h4>
-                                <p className="mt-1 line-clamp-1 text-sm leading-6 text-muted-foreground">
-                                  {conversation.lastMessage}
-                                </p>
-                              </div>
-
-                              <div className="flex w-14 shrink-0 flex-col items-end gap-2 pt-0.5">
-                                <span className="text-xs leading-5 text-muted-foreground">
-                                  {conversation.time}
-                                </span>
-                                {conversation.unread > 0 && (
-                                  <Badge className="flex min-w-5 items-center justify-center rounded-full px-1.5 py-0 text-xs">
-                                    {conversation.unread}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-
-                            <p className="mt-2 truncate text-xs leading-5 text-primary">
-                              {conversation.project}
-                            </p>
-                          </div>
-                        </div>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="p-6 text-center text-sm text-muted-foreground">
-                      {text.noSearchResults}
-                    </div>
-                  )}
-                </ScrollArea>
-              </div>
-
-              <div
-                className={`${
-                  isChatOpenOnMobile ? 'flex' : 'hidden md:flex'
-                } min-w-0 min-h-0 flex-1 flex-col`}
-              >
-                {activeConversation ? (
-                  <>
-                    <div className="relative flex items-center justify-between border-b border-border p-4">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="md:hidden"
-                          onClick={() => setIsChatOpenOnMobile(false)}
-                        >
-                          <ArrowRight className="size-5" />
-                        </Button>
-                        <div className="relative shrink-0">
-                          <div className="flex size-10 items-center justify-center rounded-full bg-primary/10">
-                            <User className="size-5 text-primary" />
-                          </div>
-                          {activeConversation.online && (
-                            <Circle className="absolute bottom-0 left-0 size-3 fill-green-500 text-green-500" />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <h3 className="truncate font-semibold">
-                            <Link
-                              to={activeConversation.profilePath}
-                              state={viewerProfileState}
-                              className="hover:text-primary hover:underline"
-                            >
-                              {activeConversation.name}
-                            </Link>
-                          </h3>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {activeConversation.project}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="relative shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setIsConversationMenuOpen((current) => !current)}
-                        >
-                          <MoreVertical className="size-5" />
-                        </Button>
-
-                        {isConversationMenuOpen && (
-                          <div
-                            className={`absolute top-12 z-50 w-56 rounded-md border border-border bg-white p-1 shadow-lg ${
-                              language === 'en' ? 'right-0' : 'left-0'
-                            }`}
-                          >
-                            <div className="px-2 py-2 text-sm font-medium">
-                              {text.conversationOptions}
-                            </div>
-                            <div className="my-1 h-px bg-border" />
-                            <button
-                              type="button"
-                              onClick={handleShowConversationDetails}
-                              className={`w-full rounded-sm px-2 py-2 text-sm hover:bg-accent ${
-                                language === 'en' ? 'text-left' : 'text-right'
-                              }`}
-                            >
-                              {text.showDetails}
-                            </button>
-                            {!isAdminView && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={handleMuteConversation}
-                                  className={`w-full rounded-sm px-2 py-2 text-sm hover:bg-accent ${
-                                    language === 'en' ? 'text-left' : 'text-right'
-                                  }`}
-                                >
-                                  {activeConversation &&
-                                  mutedConversationIds.includes(activeConversation.id)
-                                    ? text.unmuteNotifications
-                                    : text.muteNotifications}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={handleReportConversation}
-                                  className={`w-full rounded-sm px-2 py-2 text-sm text-destructive hover:bg-destructive/10 ${
-                                    language === 'en' ? 'text-left' : 'text-right'
-                                  }`}
-                                >
-                                  {text.reportConversation}
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <ScrollArea className="flex-1 min-h-0 p-4">
-                      <div className="space-y-4">
-                        {currentMessages.length > 0 ? (
-                          currentMessages.map((message) => {
-                            const viewerSender = getViewerMessageSender(message.sender, userType);
-                            const ownerLabel = getMessageOwnerLabel(
-                              message.sender,
-                              userType,
-                              isEnglish,
-                            );
-
-                            return (
-                              <div
-                                key={message.id}
-                                className={`flex ${
-                                  viewerSender === 'me' ? 'justify-start' : 'justify-end'
-                                }`}
-                              >
-                                <div className="max-w-[75%] space-y-2">
-                                  <p
-                                    className={`text-[11px] font-medium ${
-                                      viewerSender === 'me'
-                                        ? 'text-primary'
-                                        : 'text-muted-foreground'
-                                    }`}
-                                  >
-                                    {ownerLabel}
-                                  </p>
-                                  <div
-                                    className={`rounded-2xl px-4 py-2 ${
-                                      viewerSender === 'me'
-                                        ? 'bg-primary text-white'
-                                        : 'bg-muted text-foreground'
-                                    }`}
-                                  >
-                                    <p className="mb-1">{message.text}</p>
-                                    <p
-                                      className={`text-xs ${
-                                        viewerSender === 'me'
-                                          ? 'text-blue-100'
-                                          : 'text-muted-foreground'
-                                      }`}
-                                    >
-                                      {message.time}
-                                    </p>
-                                  </div>
-
-                                  {!isAdminView && viewerSender === 'other' && (
-                                    <div className="flex justify-end">
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-auto gap-1 px-2 py-1 text-xs text-muted-foreground"
-                                        onClick={() => handleReportMessage(message.id)}
-                                        disabled={message.reported}
-                                      >
-                                        <AlertTriangle className="size-3.5" />
-                                        {message.reported ? text.reported : text.report}
-                                      </Button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })
-                        ) : (
-                          <div className="py-10 text-center text-muted-foreground">
-                            {text.noMessagesYet}
-                          </div>
-                        )}
-                      </div>
-                    </ScrollArea>
-
-                    <div className="border-t border-border p-4">
-                      {!isAdminView && (
-                        <div className="mb-2 text-xs text-muted-foreground">
-                          {text.reportCenterIntro}{' '}
-                          <Link
-                            to={moderationPageLink}
-                            className="font-medium text-primary underline-offset-2 hover:underline"
-                          >
-                            {text.reportCenterLink}
-                          </Link>{' '}
-                          {text.reportCenterEnd}
-                        </div>
-                      )}
-
-                      <div className="mb-2 text-xs text-muted-foreground">
-                        {isAdminView ? text.adminMessageHint : text.sensitiveDataHint}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          placeholder={text.writeMessage}
-                          value={newMessage}
-                          onChange={(event) => setNewMessage(event.target.value)}
-                          className="flex-1 bg-input-background"
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              handleSendMessage();
-                            }
-                          }}
-                        />
-                        <Button size="icon" onClick={handleSendMessage}>
-                          <Send className="size-5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex flex-1 items-center justify-center text-muted-foreground">
-                    {text.noConversationSelected}
-                  </div>
-                )}
-              </div>
-            </div>
-          </Card>
-        </div>
       </div>
     </DashboardLayout>
   );

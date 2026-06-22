@@ -11,62 +11,79 @@ import {
   Input,
   Label,
 } from '@/app/components/ui';
-import { LanguageToggle } from '@/app/components/shared';
+import { FreshAuthLink, LanguageToggle } from '@/app/components/shared';
+import { ApiError, getApiErrorMessage, getValidationErrors } from '@/app/api/client';
+import {
+  clearStoredVerificationEmail,
+  clearStoredVerificationRole,
+  getStoredVerificationRole,
+  setStoredVerificationEmail,
+} from '@/app/api/tokenStorage';
+import { getAccountStatusPath, getDashboardPathForUser, useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
-
-const REGISTERED_ACCOUNT_KEY = 'workbridge-registered-account';
 
 export default function Login() {
   const navigate = useNavigate();
   const { isEnglish, language } = useLanguage();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    setStatusMessage('');
+    setFieldErrors({});
+
     if (!email || !password) {
-      setStatusMessage(
-        isEnglish
-          ? 'Please enter your email and password.'
-          : 'يرجى إدخال البريد الإلكتروني وكلمة المرور.',
-      );
+      setStatusMessage(isEnglish ? 'Please enter your email and password.' : 'يرجى إدخال البريد الإلكتروني وكلمة المرور.');
       return;
     }
 
-    if (password.length < 8) {
-      setStatusMessage(
-        isEnglish
-          ? 'Password must be at least 8 characters or digits.'
-          : 'يجب أن تكون كلمة المرور 8 أحرف أو أرقام على الأقل.',
-      );
-      return;
-    }
+    try {
+      setIsSubmitting(true);
+      const user = await login({ email, password });
+      clearStoredVerificationEmail();
+      clearStoredVerificationRole();
+      navigate(getAccountStatusPath(user) || getDashboardPathForUser(user), { replace: true });
+    } catch (error) {
+      setFieldErrors(getValidationErrors(error));
 
-    let accountType = 'personal';
+      if (error instanceof ApiError && error.status === 403) {
+        const message = error.message.toLowerCase();
+        setStoredVerificationEmail(email);
 
-    if (typeof window !== 'undefined') {
-      const raw = window.localStorage.getItem(REGISTERED_ACCOUNT_KEY);
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as { accountType?: string };
-          accountType = parsed.accountType || 'personal';
-        } catch {
-          accountType = 'personal';
+        if (message.includes('تأكيد البريد') || message.includes('verify')) {
+          navigate('/verify-email', { replace: true });
+          return;
+        }
+
+        if (message.includes('تحت المراجعة') || message.includes('under review')) {
+          navigate('/account-under-review', { replace: true });
+          return;
+        }
+
+        if (message.includes('بانتظار مراجعة') || message.includes('pending')) {
+          navigate(
+            getStoredVerificationRole() === 'company'
+              ? '/company-pending-verification'
+              : '/account-pending',
+            { replace: true },
+          );
+          return;
+        }
+
+        if (message.includes('حظر') || message.includes('blocked')) {
+          navigate('/account-blocked', { replace: true });
+          return;
         }
       }
-    }
 
-    if (accountType === 'admin') {
-      navigate('/admin');
-      return;
+      setStatusMessage(getApiErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
     }
-
-    if (accountType === 'company') {
-      navigate('/company-dashboard');
-      return;
-    }
-
-    navigate('/dashboard');
   };
 
   return (
@@ -84,12 +101,13 @@ export default function Login() {
           </div>
           <CardTitle className="text-2xl">{isEnglish ? 'Login' : 'تسجيل الدخول'}</CardTitle>
           <CardDescription>
-            {isEnglish ? 'Welcome back to Work Bridge' : 'مرحبًا بك في Work Bridge'}
+            {isEnglish ? 'Welcome back to Work Bridge' : 'مرحبا بك في Work Bridge'}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form
             className="space-y-4"
+            autoComplete="off"
             onSubmit={(event) => {
               event.preventDefault();
               handleLogin();
@@ -99,27 +117,34 @@ export default function Login() {
               <Label htmlFor="email">{isEnglish ? 'Email' : 'البريد الإلكتروني'}</Label>
               <Input
                 id="email"
+                name="email"
                 type="email"
+                autoComplete="off"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="example@email.com"
                 className="bg-input-background"
               />
+              {fieldErrors.email?.[0] ? (
+                <p className="text-xs text-destructive">{fieldErrors.email[0]}</p>
+              ) : null}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="password">{isEnglish ? 'Password' : 'كلمة المرور'}</Label>
               <Input
                 id="password"
+                name="password"
                 type="password"
+                autoComplete="new-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="••••••••"
+                placeholder="********"
                 className="bg-input-background"
               />
-              <p className="text-xs text-muted-foreground">
-                {isEnglish ? 'Minimum 8 characters or digits.' : 'الحد الأدنى 8 أحرف أو أرقام.'}
-              </p>
+              {fieldErrors.password?.[0] ? (
+                <p className="text-xs text-destructive">{fieldErrors.password[0]}</p>
+              ) : null}
             </div>
 
             <div className="flex items-center justify-between">
@@ -136,16 +161,16 @@ export default function Login() {
 
             {statusMessage ? <p className="text-sm text-destructive">{statusMessage}</p> : null}
 
-            <Button type="submit" className="w-full">
-              {isEnglish ? 'Login' : 'تسجيل الدخول'}
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? (isEnglish ? 'Logging in...' : 'جار تسجيل الدخول...') : isEnglish ? 'Login' : 'تسجيل الدخول'}
             </Button>
           </form>
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
             {isEnglish ? "Don't have an account? " : 'ليس لديك حساب؟ '}
-            <Link to="/register" className="font-semibold text-primary hover:underline">
+            <FreshAuthLink mode="register" className="font-semibold text-primary hover:underline">
               {isEnglish ? 'Create one now' : 'إنشاء حساب جديد'}
-            </Link>
+            </FreshAuthLink>
           </div>
         </CardContent>
       </Card>

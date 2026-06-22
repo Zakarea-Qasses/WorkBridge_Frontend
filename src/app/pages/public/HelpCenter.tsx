@@ -9,7 +9,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui';
-import { LanguageToggle } from '@/app/components/shared';
+import { FreshAuthLink, LanguageToggle } from '@/app/components/shared';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 
 export default function HelpCenter() {
@@ -29,10 +29,10 @@ export default function HelpCenter() {
           <div className="flex items-center gap-3">
             <LanguageToggle />
             <Button asChild variant="ghost">
-              <Link to="/login">{isEnglish ? 'Login' : 'تسجيل الدخول'}</Link>
+              <FreshAuthLink mode="login">{isEnglish ? 'Login' : 'تسجيل الدخول'}</FreshAuthLink>
             </Button>
             <Button asChild>
-              <Link to="/register">{isEnglish ? 'Create Account' : 'إنشاء حساب'}</Link>
+              <FreshAuthLink mode="register">{isEnglish ? 'Create Account' : 'إنشاء حساب'}</FreshAuthLink>
             </Button>
           </div>
         </div>
@@ -65,7 +65,7 @@ export default function HelpCenter() {
                 </Link>
               </Button>
               <Button asChild>
-                <Link to="/login">{isEnglish ? 'Go to Account' : 'الدخول إلى الحساب'}</Link>
+                <FreshAuthLink mode="login">{isEnglish ? 'Go to Account' : 'الدخول إلى الحساب'}</FreshAuthLink>
               </Button>
             </div>
           </div>
@@ -160,12 +160,12 @@ export default function HelpCenter() {
               <Link to="/privacy" className="block rounded-xl bg-slate-50 px-4 py-3 text-primary hover:bg-slate-100 hover:underline">
                 {isEnglish ? 'Privacy Policy' : 'سياسة الخصوصية'}
               </Link>
-              <Link to="/register" className="block rounded-xl bg-slate-50 px-4 py-3 text-primary hover:bg-slate-100 hover:underline">
+              <FreshAuthLink mode="register" className="block rounded-xl bg-slate-50 px-4 py-3 text-primary hover:bg-slate-100 hover:underline">
                 {isEnglish ? 'Create New Account' : 'إنشاء حساب جديد'}
-              </Link>
-              <Link to="/login" className="block rounded-xl bg-slate-50 px-4 py-3 text-primary hover:bg-slate-100 hover:underline">
+              </FreshAuthLink>
+              <FreshAuthLink mode="login" className="block rounded-xl bg-slate-50 px-4 py-3 text-primary hover:bg-slate-100 hover:underline">
                 {isEnglish ? 'Sign In to the Platform' : 'تسجيل الدخول إلى المنصة'}
-              </Link>
+              </FreshAuthLink>
             </CardContent>
           </Card>
         </section>

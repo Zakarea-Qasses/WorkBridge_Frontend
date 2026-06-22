@@ -14,6 +14,7 @@ const AdminSettings = lazyPage(() => import('@/app/pages/admin/AdminSettings'));
 
 export const adminRoutes = [
   { path: '/admin', Component: AdminDashboard },
+  { path: '/dashboard/admin', Component: AdminDashboard },
   { path: '/admin/users', Component: AdminUsers },
   { path: '/admin/verification', Component: AdminVerification },
   { path: '/admin/disputes', Component: AdminDisputes },

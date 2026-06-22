@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui';
-import { jobs, getDisplayDurationLabel, getDisplayStatusLabel } from '@/app/data';
-import { getAppliedJobIds, getServiceRequests, removeAppliedJobId } from '@/app/storage';
+import { jobs, getDisplayStatusLabel } from '@/app/data';
+import { getAppliedJobIds, removeAppliedJobId } from '@/app/storage';
+import { getMyServiceRequests, type ServiceRequest } from '@/app/api/endpoints';
 
 function getStatusBadge(status: string) {
   switch (status) {
@@ -26,15 +27,15 @@ export default function Applications() {
       ? 'You can track your applications here and withdraw any application you no longer want to continue.'
       : 'يمكنك متابعة تقديماتك وسحب التقديمات التي لم تعد ترغب بمتابعتها.',
   );
+  const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
 
   const appliedJobs = useMemo(
     () => jobs.filter((job) => appliedJobIds.includes(job.id)),
     [appliedJobIds],
   );
-  const serviceRequests = useMemo(
-    () => getServiceRequests().filter((request) => request.clientId === 1),
-    [],
-  );
+  useEffect(() => {
+    getMyServiceRequests().then(setServiceRequests).catch(() => setServiceRequests([]));
+  }, []);
 
   return (
     <DashboardLayout>
@@ -119,15 +120,15 @@ export default function Applications() {
                 <div key={request.id} className="rounded-2xl border border-border p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h3 className="font-semibold">{request.requestTitle}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">{request.serviceTitle}</p>
+                      <h3 className="font-semibold">{request.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">{request.service?.title}</p>
                     </div>
                     <Badge className={getStatusBadge(request.status)}>
                       {getDisplayStatusLabel(request.status, isEnglish)}
                     </Badge>
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    {getDisplayDurationLabel(request.deadline, isEnglish)}
+                    {request.delivery_days} {isEnglish ? 'days' : 'يوم'}
                   </p>
                 </div>
               ))}

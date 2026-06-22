@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
@@ -17,48 +17,65 @@ import {
   SelectValue,
   Textarea,
 } from '@/app/components/ui';
-import { createProject } from '@/app/storage';
-import { getCitiesByGovernorate, getLocationLabel, governorates } from '@/app/data/locationsData';
-
-const defaultGovernorateId = 1;
-const defaultCityId = 101;
+import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
+import {
+  createProject,
+  getCategories,
+  getCitiesByGovernorate,
+  getGovernorates,
+  type Category,
+  type LocationOption,
+} from '@/app/api/endpoints';
 
 export default function CreateProject() {
   const navigate = useNavigate();
   const { isEnglish, language } = useLanguage();
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [governorates, setGovernorates] = useState<LocationOption[]>([]);
+  const [cities, setCities] = useState<LocationOption[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     budget: '',
-    duration: '',
-    category: '',
+    duration_days: '',
+    category_id: '',
     skills: '',
-    governorateId: String(defaultGovernorateId),
-    cityId: String(defaultCityId),
+    governorateId: '',
+    cityId: '',
   });
 
-  const normalizeBudget = (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return '';
+  useEffect(() => {
+    Promise.all([getCategories(), getGovernorates()])
+      .then(([nextCategories, nextGovernorates]) => {
+        setCategories(nextCategories);
+        setGovernorates(nextGovernorates);
+        const firstGovernorate = nextGovernorates[0];
+        if (firstGovernorate) {
+          setFormData((current) => ({ ...current, governorateId: String(firstGovernorate.id) }));
+        }
+      })
+      .catch((fetchError) => setError(getApiErrorMessage(fetchError)));
+  }, []);
+
+  useEffect(() => {
+    if (!formData.governorateId) {
+      return;
     }
 
-    return trimmed.startsWith('$') ? trimmed : `$${trimmed}`;
-  };
-
-  const normalizeBudgetInput = (value: string) => value.replace(/[^\d]/g, '');
-  const normalizeDaysInput = (value: string) => value.replace(/[^\d]/g, '');
-
-  const formatDaysLabel = (value: string) => {
-    const digits = normalizeDaysInput(value);
-    if (!digits) {
-      return '';
-    }
-
-    return `${digits} ${digits === '1' ? (isEnglish ? 'day' : 'يوم') : isEnglish ? 'days' : 'أيام'}`;
-  };
+    getCitiesByGovernorate(formData.governorateId)
+      .then((nextCities) => {
+        setCities(nextCities);
+        setFormData((current) => ({
+          ...current,
+          cityId: current.cityId || String(nextCities[0]?.id || ''),
+        }));
+      })
+      .catch((fetchError) => setError(getApiErrorMessage(fetchError)));
+  }, [formData.governorateId]);
 
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({
@@ -67,61 +84,38 @@ export default function CreateProject() {
     }));
   };
 
-  const handleDurationChange = (value: string) => {
-    const normalizedValue = normalizeDaysInput(value);
-
-    if (!normalizedValue) {
-      handleChange('duration', '');
-      setError('');
-      return;
-    }
-
-    if (Number(normalizedValue) === 0) {
-      handleChange('duration', '');
-      setError(isEnglish ? 'You cannot enter 0 in the number of days.' : 'لا يمكن إدخال 0 في عدد الأيام.');
-      return;
-    }
-
-    handleChange('duration', String(Number(normalizedValue)));
-    setError('');
-  };
-
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-
-    if (!formData.title.trim() || !formData.description.trim() || !formData.budget.trim()) {
-      setError(
-        isEnglish
-          ? 'Complete the required fields before publishing the project.'
-          : 'أكمل الحقول الأساسية قبل نشر المشروع.',
-      );
-      return;
-    }
-
-    if (!normalizeDaysInput(formData.duration) || Number(normalizeDaysInput(formData.duration)) <= 0) {
-      setError(isEnglish ? 'Number of days must be greater than 0.' : 'عدد الأيام يجب أن يكون أكبر من 0.');
-      return;
-    }
-
-    createProject({
-      title: formData.title.trim(),
-      description: `${formData.description.trim()}\n\n${isEnglish ? 'Location' : 'الموقع'}: ${getLocationLabel(
-        Number(formData.governorateId),
-        Number(formData.cityId),
-      )}`,
-      budget: normalizeBudget(formData.budget),
-      budgetValue: Number(normalizeBudgetInput(formData.budget)),
-      category: formData.category || (isEnglish ? 'General' : 'عام'),
-      duration: formatDaysLabel(formData.duration),
-      client: isEnglish ? 'You' : 'أنت',
-      skills: formData.skills
-        .split(',')
-        .map((skill) => skill.trim())
-        .filter(Boolean),
-    });
-
     setError('');
-    navigate('/projects');
+    setFieldErrors({});
+
+    if (!formData.title.trim() || !formData.description.trim() || !formData.budget.trim() || !formData.category_id) {
+      setError(isEnglish ? 'Complete the required fields before publishing the project.' : 'أكمل الحقول الأساسية قبل نشر المشروع.');
+      return;
+    }
+
+    const skillIds = formData.skills
+      .split(',')
+      .map((skill) => Number(skill.trim()))
+      .filter((skill) => Number.isInteger(skill) && skill > 0);
+
+    try {
+      setIsSubmitting(true);
+      await createProject({
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        budget: Number(formData.budget),
+        duration_days: Number(formData.duration_days),
+        category_id: Number(formData.category_id),
+        skills: skillIds,
+      });
+      navigate('/projects');
+    } catch (submitError) {
+      setFieldErrors(getValidationErrors(submitError));
+      setError(getApiErrorMessage(submitError));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -130,9 +124,7 @@ export default function CreateProject() {
         <div>
           <h1 className="text-3xl font-bold">{isEnglish ? 'Create New Project' : 'إنشاء مشروع جديد'}</h1>
           <p className="mt-1 text-muted-foreground">
-            {isEnglish
-              ? 'Enter the details of the project you want to publish.'
-              : 'أدخل تفاصيل المشروع الذي تريد نشره.'}
+            {isEnglish ? 'Enter the details of the project you want to publish.' : 'أدخل تفاصيل المشروع الذي تريد نشره.'}
           </p>
         </div>
 
@@ -140,7 +132,7 @@ export default function CreateProject() {
           <CardHeader>
             <CardTitle>{isEnglish ? 'Project Details' : 'تفاصيل المشروع'}</CardTitle>
             <CardDescription>
-              {isEnglish ? 'Fill out the following fields to publish your project.' : 'املأ الحقول التالية لنشر مشروعك.'}
+              {isEnglish ? 'Fields are submitted using the Laravel project API names.' : 'سيتم إرسال الحقول بالأسماء المطلوبة في الخادم.'}
             </CardDescription>
           </CardHeader>
 
@@ -148,47 +140,42 @@ export default function CreateProject() {
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
                 <label className="text-sm font-medium">{isEnglish ? 'Project Title' : 'عنوان المشروع'}</label>
-                <Input
-                  placeholder={isEnglish ? 'Example: Develop an e-commerce store' : 'مثال: تطوير متجر إلكتروني'}
-                  value={formData.title}
-                  onChange={(event) => handleChange('title', event.target.value)}
-                />
+                <Input value={formData.title} onChange={(event) => handleChange('title', event.target.value)} />
+                {fieldErrors.title?.[0] ? <p className="text-xs text-destructive">{fieldErrors.title[0]}</p> : null}
               </div>
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">{isEnglish ? 'Project Description' : 'وصف المشروع'}</label>
                 <Textarea
                   rows={6}
-                  placeholder={
-                    isEnglish
-                      ? 'Write a clear description about the project and its requirements'
-                      : 'اكتب وصفًا واضحًا عن المشروع والمتطلبات'
-                  }
                   value={formData.description}
                   onChange={(event) => handleChange('description', event.target.value)}
                   className="resize-none"
                 />
+                {fieldErrors.description?.[0] ? <p className="text-xs text-destructive">{fieldErrors.description[0]}</p> : null}
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">{isEnglish ? 'Budget' : 'الميزانية'}</label>
                   <Input
-                    placeholder="$5000"
+                    type="number"
+                    min="0"
                     value={formData.budget}
-                    onBlur={() => handleChange('budget', normalizeBudget(formData.budget))}
-                    onChange={(event) => handleChange('budget', normalizeBudgetInput(event.target.value))}
+                    onChange={(event) => handleChange('budget', event.target.value)}
                   />
+                  {fieldErrors.budget?.[0] ? <p className="text-xs text-destructive">{fieldErrors.budget[0]}</p> : null}
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">{isEnglish ? 'Project Duration in Days' : 'مدة المشروع بالأيام'}</label>
                   <Input
-                    placeholder="7"
-                    value={formData.duration}
-                    onBlur={() => handleChange('duration', formatDaysLabel(formData.duration))}
-                    onChange={(event) => handleDurationChange(event.target.value)}
+                    type="number"
+                    min="1"
+                    value={formData.duration_days}
+                    onChange={(event) => handleChange('duration_days', event.target.value)}
                   />
+                  {fieldErrors.duration_days?.[0] ? <p className="text-xs text-destructive">{fieldErrors.duration_days[0]}</p> : null}
                 </div>
               </div>
 
@@ -197,13 +184,7 @@ export default function CreateProject() {
                   <label className="text-sm font-medium">{isEnglish ? 'Governorate' : 'المحافظة'}</label>
                   <Select
                     value={formData.governorateId}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        governorateId: value,
-                        cityId: String(getCitiesByGovernorate(Number(value))[0]?.id ?? defaultCityId),
-                      }))
-                    }
+                    onValueChange={(value) => setFormData((prev) => ({ ...prev, governorateId: value, cityId: '' }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder={isEnglish ? 'Choose governorate' : 'اختر المحافظة'} />
@@ -225,7 +206,7 @@ export default function CreateProject() {
                       <SelectValue placeholder={isEnglish ? 'Choose city' : 'اختر المدينة'} />
                     </SelectTrigger>
                     <SelectContent>
-                      {getCitiesByGovernorate(Number(formData.governorateId)).map((city) => (
+                      {cities.map((city) => (
                         <SelectItem key={city.id} value={String(city.id)}>
                           {city.name}
                         </SelectItem>
@@ -235,34 +216,41 @@ export default function CreateProject() {
                 </div>
               </div>
 
-              {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
               <div className="space-y-2">
                 <label className="text-sm font-medium">{isEnglish ? 'Category' : 'التصنيف'}</label>
-                <Select onValueChange={(value) => handleChange('category', value)}>
+                <Select value={formData.category_id} onValueChange={(value) => handleChange('category_id', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder={isEnglish ? 'Choose category' : 'اختر التصنيف'} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="برمجة وتطوير">{isEnglish ? 'Programming & Development' : 'برمجة وتطوير'}</SelectItem>
-                    <SelectItem value="تصميم">{isEnglish ? 'Design' : 'تصميم'}</SelectItem>
-                    <SelectItem value="كتابة وترجمة">{isEnglish ? 'Writing & Translation' : 'كتابة وترجمة'}</SelectItem>
-                    <SelectItem value="تسويق">{isEnglish ? 'Marketing' : 'تسويق'}</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={String(category.id)}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                {fieldErrors.category_id?.[0] ? <p className="text-xs text-destructive">{fieldErrors.category_id[0]}</p> : null}
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">{isEnglish ? 'Required Skills' : 'المهارات المطلوبة'}</label>
+                <label className="text-sm font-medium">
+                  {isEnglish ? 'Required Skill IDs' : 'معرفات المهارات المطلوبة'}
+                </label>
                 <Input
-                  placeholder={isEnglish ? 'Example: React, Node.js, MongoDB' : 'مثال: React, Node.js, MongoDB'}
+                  placeholder={isEnglish ? 'Example: 1, 2, 3' : 'مثال: 1, 2, 3'}
                   value={formData.skills}
                   onChange={(event) => handleChange('skills', event.target.value)}
                 />
+                {fieldErrors.skills?.[0] ? <p className="text-xs text-destructive">{fieldErrors.skills[0]}</p> : null}
               </div>
 
+              {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
               <div className="flex gap-3">
-                <Button type="submit">{isEnglish ? 'Publish Project' : 'نشر المشروع'}</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? (isEnglish ? 'Publishing...' : 'جار النشر...') : isEnglish ? 'Publish Project' : 'نشر المشروع'}
+                </Button>
                 <Button type="button" variant="outline" onClick={() => navigate('/projects')}>
                   {isEnglish ? 'Cancel' : 'إلغاء'}
                 </Button>

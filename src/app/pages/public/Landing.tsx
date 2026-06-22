@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui';
-import { LanguageToggle } from '@/app/components/shared';
+import { FreshAuthLink, LanguageToggle } from '@/app/components/shared';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import {
   Briefcase,
@@ -252,8 +252,6 @@ const content = {
 export default function Landing() {
   const { language: currentLanguage } = useLanguage();
 
-  const loginPath = '/login';
-  const registerPath = '/register';
   const helpPath = '/help';
   const termsPath = '/terms';
   const privacyPath = '/privacy';
@@ -271,10 +269,10 @@ export default function Landing() {
           <div className="flex items-center gap-4">
             <LanguageToggle />
             <Button asChild variant="ghost">
-              <Link to={loginPath}>{t.login}</Link>
+              <FreshAuthLink mode="login">{t.login}</FreshAuthLink>
             </Button>
             <Button asChild>
-              <Link to={registerPath}>{t.register}</Link>
+              <FreshAuthLink mode="register">{t.register}</FreshAuthLink>
             </Button>
           </div>
         </div>
@@ -287,10 +285,10 @@ export default function Landing() {
             <p className="mb-8 text-xl text-muted-foreground">{t.heroDescription}</p>
             <div className="flex flex-wrap items-center justify-center gap-4">
               <Button asChild size="lg" className="px-8 text-lg">
-                <Link to={registerPath}>{t.startNow}</Link>
+                <FreshAuthLink mode="register">{t.startNow}</FreshAuthLink>
               </Button>
               <Button asChild size="lg" variant="outline" className="px-8 text-lg">
-                <Link to={loginPath}>{t.explore}</Link>
+                <FreshAuthLink mode="login">{t.explore}</FreshAuthLink>
               </Button>
             </div>
 
@@ -394,12 +392,12 @@ export default function Landing() {
           <div className="mb-8 flex items-center justify-between gap-4">
             <h2 className="text-3xl font-bold text-foreground">{t.featuredJobsTitle}</h2>
             <Button asChild variant="outline">
-              <Link to={loginPath}>{t.viewAll}</Link>
+              <FreshAuthLink mode="login">{t.viewAll}</FreshAuthLink>
             </Button>
           </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {t.jobsData.map((job) => (
-              <Link key={job.title} to={loginPath} className="block">
+              <FreshAuthLink key={job.title} mode="login" className="block">
                 <Card className="cursor-pointer transition-shadow hover:shadow-lg">
                   <CardHeader>
                     <div className="flex items-start justify-between gap-3">
@@ -415,7 +413,7 @@ export default function Landing() {
                     <p className="font-semibold text-primary">{job.salary}</p>
                   </CardContent>
                 </Card>
-              </Link>
+              </FreshAuthLink>
             ))}
           </div>
         </div>
@@ -426,12 +424,12 @@ export default function Landing() {
           <div className="mb-8 flex items-center justify-between gap-4">
             <h2 className="text-3xl font-bold text-foreground">{t.freelanceProjectsTitle}</h2>
             <Button asChild variant="outline">
-              <Link to={loginPath}>{t.viewAll}</Link>
+              <FreshAuthLink mode="login">{t.viewAll}</FreshAuthLink>
             </Button>
           </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {t.projectsData.map((project) => (
-              <Link key={project.title} to={loginPath} className="block">
+              <FreshAuthLink key={project.title} mode="login" className="block">
                 <Card className="cursor-pointer transition-shadow hover:shadow-lg">
                   <CardHeader>
                     <CardTitle className="text-lg">{project.title}</CardTitle>
@@ -448,7 +446,7 @@ export default function Landing() {
                     </div>
                   </CardContent>
                 </Card>
-              </Link>
+              </FreshAuthLink>
             ))}
           </div>
         </div>
@@ -462,7 +460,7 @@ export default function Landing() {
           </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {t.freelancersData.map((freelancer) => (
-              <Link key={freelancer.id} to={loginPath} className="block">
+              <FreshAuthLink key={freelancer.id} mode="login" className="block">
                 <Card className="cursor-pointer text-center transition-shadow hover:shadow-lg">
                   <CardHeader>
                     <div className="mx-auto mb-4 flex size-20 items-center justify-center rounded-full bg-primary/10">
@@ -483,7 +481,7 @@ export default function Landing() {
                     </div>
                   </CardContent>
                 </Card>
-              </Link>
+              </FreshAuthLink>
             ))}
           </div>
         </div>
@@ -495,7 +493,7 @@ export default function Landing() {
           <p className="mb-8 text-xl text-blue-100">{t.ctaDescription}</p>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Button asChild size="lg" variant="secondary" className="px-8 text-lg">
-              <Link to={registerPath}>{t.freeAccount}</Link>
+              <FreshAuthLink mode="register">{t.freeAccount}</FreshAuthLink>
             </Button>
             <Button asChild size="lg" variant="outline" className="border-white/30 bg-transparent px-8 text-lg text-white hover:bg-white/10">
               <Link to={helpPath}>{t.visitHelp}</Link>
@@ -518,19 +516,19 @@ export default function Landing() {
               <h3 className="mb-4 font-semibold">{t.quickLinks}</h3>
               <ul className="space-y-2 text-slate-400">
                 <li>
-                  <Link to={loginPath} className="hover:text-white">
+                  <FreshAuthLink mode="login" className="hover:text-white">
                     {t.jobs}
-                  </Link>
+                  </FreshAuthLink>
                 </li>
                 <li>
-                  <Link to={loginPath} className="hover:text-white">
+                  <FreshAuthLink mode="login" className="hover:text-white">
                     {t.projects}
-                  </Link>
+                  </FreshAuthLink>
                 </li>
                 <li>
-                  <Link to={registerPath} className="hover:text-white">
+                  <FreshAuthLink mode="register" className="hover:text-white">
                     {t.register}
-                  </Link>
+                  </FreshAuthLink>
                 </li>
               </ul>
             </div>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import {
   Bell,
@@ -29,6 +29,8 @@ import {
 } from '@/app/components/ui';
 import { LanguageToggle } from '@/app/components/shared';
 import { useLanguage } from '@/app/providers/LanguageProvider';
+import { useAuth } from '@/app/providers/AuthProvider';
+import { getUnreadNotificationCount } from '@/app/api/endpoints';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -47,7 +49,9 @@ export default function DashboardLayout({
 }: DashboardLayoutProps) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { isEnglish, language } = useLanguage();
+  const { logout, user } = useAuth();
 
   const notificationsLink =
     userType === 'admin'
@@ -117,6 +121,12 @@ export default function DashboardLayout({
     ],
     [isEnglish, messagesLink, userType],
   );
+
+  useEffect(() => {
+    getUnreadNotificationCount()
+      .then(setUnreadCount)
+      .catch(() => setUnreadCount(notifications.length));
+  }, [notifications.length]);
 
   const userMenuItems = useMemo<MenuItem[]>(
     () => [
@@ -199,16 +209,7 @@ export default function DashboardLayout({
         ? '/company-dashboard'
         : '/freelancers/1';
 
-  const accountName =
-    userType === 'admin'
-      ? isEnglish
-        ? 'Platform Admin'
-        : 'أدمن المنصة'
-      : userType === 'company'
-        ? 'Work Bridge Labs'
-        : isEnglish
-          ? 'Ahmad Mohammad'
-          : 'أحمد محمد';
+  const accountName = user?.name || (isEnglish ? 'My account' : 'حسابي');
 
   return (
     <div className="flex min-h-screen bg-muted" dir={language === 'en' ? 'ltr' : 'rtl'}>
@@ -245,11 +246,9 @@ export default function DashboardLayout({
         </nav>
 
         <div className="border-t border-border p-4">
-          <Button asChild variant="ghost" className="w-full justify-start gap-3 text-destructive">
-            <Link to="/">
-              <LogOut className="size-5" />
-              {isEnglish ? 'Log Out' : 'تسجيل الخروج'}
-            </Link>
+          <Button variant="ghost" className="w-full justify-start gap-3 text-destructive" onClick={logout}>
+            <LogOut className="size-5" />
+            {isEnglish ? 'Log Out' : 'تسجيل الخروج'}
           </Button>
         </div>
       </aside>
@@ -283,7 +282,7 @@ export default function DashboardLayout({
                 <Link to={notificationsLink}>
                   <Bell className="size-5" />
                   <Badge className="absolute -left-1 -top-1 flex size-5 items-center justify-center p-0 text-xs">
-                    {notifications.length}
+                    {unreadCount}
                   </Badge>
                 </Link>
               </Button>
@@ -340,11 +339,15 @@ export default function DashboardLayout({
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link to="/" className="cursor-pointer text-destructive">
-                      <LogOut className="ml-2 size-4" />
-                      {isEnglish ? 'Log Out' : 'تسجيل الخروج'}
-                    </Link>
+                  <DropdownMenuItem
+                    className="cursor-pointer text-destructive"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      logout();
+                    }}
+                  >
+                    <LogOut className="ml-2 size-4" />
+                    {isEnglish ? 'Log Out' : 'تسجيل الخروج'}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
