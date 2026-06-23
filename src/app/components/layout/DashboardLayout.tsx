@@ -30,7 +30,7 @@ import {
 import { LanguageToggle } from '@/app/components/shared';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { useAuth } from '@/app/providers/AuthProvider';
-import { getUnreadNotificationCount } from '@/app/api/endpoints';
+import { getConversations, getUnreadNotificationCount } from '@/app/api/endpoints';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -43,6 +43,8 @@ interface MenuItem {
   path: string;
 }
 
+const NOTIFICATION_COUNT_CHANGED_EVENT = 'workbridge:notification-count-changed';
+
 export default function DashboardLayout({
   children,
   userType = 'user',
@@ -50,6 +52,7 @@ export default function DashboardLayout({
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const { isEnglish, language } = useLanguage();
   const { logout, user } = useAuth();
 
@@ -74,59 +77,67 @@ export default function DashboardLayout({
         ? '/company/settings'
         : '/settings';
 
-  const notifications = useMemo(
-    () => [
-      {
-        id: 1,
-        title: isEnglish ? 'New Message' : 'رسالة جديدة',
-        description: isEnglish
-          ? 'You have a new message in your conversations.'
-          : 'لديك رسالة جديدة في المحادثات.',
-        to: messagesLink,
-      },
-      {
-        id: 2,
-        title: isEnglish ? 'New Update' : 'تحديث جديد',
-        description: isEnglish
-          ? userType === 'admin'
-            ? 'There is an item waiting for admin review.'
-            : userType === 'company'
-              ? 'A job or applicant status has been updated.'
-              : 'A project or service status has been updated.'
-          : userType === 'admin'
-            ? 'هناك عنصر يحتاج مراجعة إدارية.'
-            : userType === 'company'
-              ? 'تم تحديث حالة وظيفة أو متقدم.'
-              : 'تم تحديث حالة مشروع أو خدمة.',
-        to:
-          userType === 'admin'
-            ? '/admin/users'
-            : userType === 'company'
-              ? '/company/jobs'
-              : '/projects',
-      },
-      {
-        id: 3,
-        title: isEnglish ? 'Financial Alert' : 'تنبيه مالي',
-        description: isEnglish
-          ? 'A new financial transaction is waiting for review.'
-          : 'هناك معاملة جديدة بانتظار المراجعة.',
-        to:
-          userType === 'admin'
-            ? '/admin/site-wallet'
-            : userType === 'company'
-              ? '/company/wallet'
-              : '/wallet',
-      },
-    ],
-    [isEnglish, messagesLink, userType],
-  );
 
   useEffect(() => {
-    getUnreadNotificationCount()
-      .then(setUnreadCount)
-      .catch(() => setUnreadCount(notifications.length));
-  }, [notifications.length]);
+    let mounted = true;
+
+    const loadUnreadNotifications = () => {
+      getUnreadNotificationCount()
+        .then((count) => {
+          if (mounted) {
+            setUnreadCount(Math.max(0, count));
+          }
+        })
+        .catch(() => {
+          if (mounted) {
+            setUnreadCount(0);
+          }
+        });
+    };
+
+    const handleUnreadCountChanged = (event: Event) => {
+      const count = (event as CustomEvent<{ count?: number }>).detail?.count;
+
+      if (typeof count === 'number') {
+        setUnreadCount(Math.max(0, count));
+        return;
+      }
+
+      loadUnreadNotifications();
+    };
+
+    setUnreadCount(0);
+    loadUnreadNotifications();
+    window.addEventListener(NOTIFICATION_COUNT_CHANGED_EVENT, handleUnreadCountChanged);
+    const timer = window.setInterval(loadUnreadNotifications, 30000);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener(NOTIFICATION_COUNT_CHANGED_EVENT, handleUnreadCountChanged);
+      window.clearInterval(timer);
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (userType === 'admin') {
+      setUnreadMessages(0);
+      return;
+    }
+
+    const loadUnreadMessages = () => {
+      getConversations()
+        .then((items) =>
+          setUnreadMessages(
+            items.reduce((total, conversation) => total + (conversation.unread_count || 0), 0),
+          ),
+        )
+        .catch(() => undefined);
+    };
+
+    loadUnreadMessages();
+    const timer = window.setInterval(loadUnreadMessages, 10000);
+    return () => window.clearInterval(timer);
+  }, [userType]);
 
   const userMenuItems = useMemo<MenuItem[]>(
     () => [
@@ -200,14 +211,16 @@ export default function DashboardLayout({
       ? '/admin'
       : userType === 'company'
         ? '/company/profile'
-        : '/profile/1';
+        : '/profile';
 
   const publicProfileLink =
     userType === 'admin'
       ? '/admin'
       : userType === 'company'
         ? '/company-dashboard'
-        : '/freelancers/1';
+        : user?.id
+          ? `/freelancers/${user.id}`
+          : '/profile';
 
   const accountName = user?.name || (isEnglish ? 'My account' : 'حسابي');
 
@@ -281,9 +294,11 @@ export default function DashboardLayout({
               <Button asChild variant="ghost" size="icon" className="relative">
                 <Link to={notificationsLink}>
                   <Bell className="size-5" />
-                  <Badge className="absolute -left-1 -top-1 flex size-5 items-center justify-center p-0 text-xs">
-                    {unreadCount}
-                  </Badge>
+                  {unreadCount > 0 ? (
+                    <Badge className="absolute -left-1 -top-1 flex size-5 items-center justify-center p-0 text-xs">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </Badge>
+                  ) : null}
                 </Link>
               </Button>
 
@@ -355,6 +370,19 @@ export default function DashboardLayout({
               <Button asChild variant="link" className="hidden px-0 text-foreground md:inline-flex">
                 <Link to={profileLink}>{accountName}</Link>
               </Button>
+
+              {userType !== 'admin' ? (
+                <Button asChild variant="ghost" size="icon" className="relative">
+                  <Link to={messagesLink}>
+                    <MessageSquare className="size-5" />
+                    {unreadMessages > 0 ? (
+                      <Badge className="absolute -left-1 -top-1 flex size-5 items-center justify-center p-0 text-xs">
+                        {unreadMessages > 99 ? '99+' : unreadMessages}
+                      </Badge>
+                    ) : null}
+                  </Link>
+                </Button>
+              ) : null}
             </div>
           </div>
         </header>

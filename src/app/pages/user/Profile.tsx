@@ -1,5 +1,14 @@
-import { useEffect, useState } from 'react';
-import { AlertCircle, Briefcase, CheckCircle2, LoaderCircle, Mail, MapPin, Phone, User } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  AlertCircle,
+  Briefcase,
+  CheckCircle2,
+  LoaderCircle,
+  Mail,
+  MapPin,
+  Phone,
+  User,
+} from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import {
   Badge,
@@ -27,6 +36,11 @@ interface ProfileDraft {
   skills: string;
 }
 
+type Status = {
+  type: 'success' | 'error';
+  message: string;
+} | null;
+
 function createDraft(profile: PersonalProfile, name: string): ProfileDraft {
   return {
     name,
@@ -45,41 +59,31 @@ export default function Profile() {
   const [profile, setProfile] = useState<PersonalProfile | null>(null);
   const [draft, setDraft] = useState<ProfileDraft | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
-  const [statusMessage, setStatusMessage] = useState('');
+  const [status, setStatus] = useState<Status>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
-
-    window.localStorage.removeItem('workbridge-user-profile');
+  const loadProfile = useCallback(async () => {
     setIsLoading(true);
-    getProfile()
-      .then((loadedProfile) => {
-        if (!mounted) {
-          return;
-        }
+    setStatus(null);
 
-        setProfile(loadedProfile);
-        setDraft(createDraft(loadedProfile, user?.name || ''));
-        setStatusMessage('');
-      })
-      .catch((error) => {
-        if (mounted) {
-          setStatusMessage(getApiErrorMessage(error));
-        }
-      })
-      .finally(() => {
-        if (mounted) {
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      mounted = false;
-    };
+    try {
+      const response = await getProfile();
+      setProfile(response.profile);
+      setDraft(createDraft(response.profile, user?.name || response.profile.name || ''));
+    } catch (error) {
+      setProfile(null);
+      setDraft(null);
+      setStatus({ type: 'error', message: getApiErrorMessage(error) });
+    } finally {
+      setIsLoading(false);
+    }
   }, [user?.name]);
+
+  useEffect(() => {
+    void loadProfile();
+  }, [loadProfile]);
 
   const startEditing = () => {
     if (!profile) {
@@ -88,7 +92,7 @@ export default function Profile() {
 
     setDraft(createDraft(profile, user?.name || ''));
     setFieldErrors({});
-    setStatusMessage('');
+    setStatus(null);
     setIsEditing(true);
   };
 
@@ -101,7 +105,7 @@ export default function Profile() {
     try {
       setIsSaving(true);
       setFieldErrors({});
-      setStatusMessage('');
+      setStatus(null);
 
       const updatedProfile = await updateProfile({
         name: draft.name.trim(),
@@ -117,18 +121,22 @@ export default function Profile() {
       });
 
       setProfile(updatedProfile);
+      setDraft(createDraft(updatedProfile, draft.name.trim()));
       await refreshUser();
       setIsEditing(false);
-      setStatusMessage(isEnglish ? 'Profile updated successfully.' : 'تم تحديث الملف الشخصي بنجاح.');
+      setStatus({
+        type: 'success',
+        message: isEnglish ? 'Profile updated successfully.' : 'تم تحديث الملف الشخصي بنجاح.',
+      });
     } catch (error) {
       setFieldErrors(getValidationErrors(error));
-      setStatusMessage(getApiErrorMessage(error));
+      setStatus({ type: 'error', message: getApiErrorMessage(error) });
     } finally {
       setIsSaving(false);
     }
   };
 
-  const displayedName = user?.name || draft?.name || '';
+  const displayedName = draft?.name || user?.name || '';
   const joinedAt = profile?.created_at
     ? new Intl.DateTimeFormat(isEnglish ? 'en' : 'ar', {
         year: 'numeric',
@@ -145,17 +153,35 @@ export default function Profile() {
           </div>
         ) : !profile || !draft ? (
           <Card>
-            <CardContent className="flex items-center gap-3 pt-6 text-destructive">
-              <AlertCircle className="size-5 shrink-0" />
-              <p>{statusMessage || (isEnglish ? 'Profile could not be loaded.' : 'تعذر تحميل الملف الشخصي.')}</p>
+            <CardContent className="flex min-h-48 flex-col items-center justify-center gap-4 text-center">
+              <AlertCircle className="size-8 text-destructive" />
+              <p className="text-destructive">
+                {status?.message ||
+                  (isEnglish ? 'Profile could not be loaded.' : 'تعذر تحميل الملف الشخصي.')}
+              </p>
+              <Button variant="outline" onClick={() => void loadProfile()}>
+                {isEnglish ? 'Try again' : 'إعادة المحاولة'}
+              </Button>
             </CardContent>
           </Card>
         ) : (
           <>
-            {statusMessage ? (
-              <Card className="border-primary/20 bg-primary/5">
-                <CardContent className="pt-6 text-sm text-primary">{statusMessage}</CardContent>
-              </Card>
+            {status ? (
+              <div
+                role="status"
+                className={`flex items-center gap-2 rounded-md border px-4 py-3 text-sm ${
+                  status.type === 'success'
+                    ? 'border-green-200 bg-green-50 text-green-700'
+                    : 'border-destructive/30 bg-destructive/5 text-destructive'
+                }`}
+              >
+                {status.type === 'success' ? (
+                  <CheckCircle2 className="size-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="size-4 shrink-0" />
+                )}
+                <span>{status.message}</span>
+              </div>
             ) : null}
 
             <Card>
@@ -178,7 +204,8 @@ export default function Profile() {
                           ) : null}
                         </div>
                         <p className="mt-2 text-lg text-muted-foreground">
-                          {profile.job_title || (isEnglish ? 'No job title added' : 'لم تتم إضافة مسمى وظيفي')}
+                          {profile.job_title ||
+                            (isEnglish ? 'No job title added' : 'لم تتم إضافة مسمى وظيفي')}
                         </p>
                       </div>
 
@@ -233,7 +260,9 @@ export default function Profile() {
                       ) : null}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="profile-title">{isEnglish ? 'Job title' : 'المسمى الوظيفي'}</Label>
+                      <Label htmlFor="profile-title">
+                        {isEnglish ? 'Job title' : 'المسمى الوظيفي'}
+                      </Label>
                       <Input
                         id="profile-title"
                         value={draft.job_title}
@@ -247,6 +276,7 @@ export default function Profile() {
                       <Label htmlFor="profile-phone">{isEnglish ? 'Phone' : 'رقم الهاتف'}</Label>
                       <Input
                         id="profile-phone"
+                        type="tel"
                         value={draft.phone}
                         onChange={(event) => setDraft({ ...draft, phone: event.target.value })}
                       />
@@ -268,7 +298,9 @@ export default function Profile() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="profile-description">{isEnglish ? 'Professional summary' : 'الملخص المهني'}</Label>
+                    <Label htmlFor="profile-description">
+                      {isEnglish ? 'Professional summary' : 'الملخص المهني'}
+                    </Label>
                     <Textarea
                       id="profile-description"
                       rows={3}
@@ -299,7 +331,11 @@ export default function Profile() {
                       id="profile-skills"
                       value={draft.skills}
                       onChange={(event) => setDraft({ ...draft, skills: event.target.value })}
-                      placeholder={isEnglish ? 'React, TypeScript, UI Design' : 'React, TypeScript, تصميم واجهات'}
+                      placeholder={
+                        isEnglish
+                          ? 'React, TypeScript, UI Design'
+                          : 'React, TypeScript, تصميم واجهات'
+                      }
                     />
                     <p className="text-xs text-muted-foreground">
                       {isEnglish ? 'Separate skills with commas.' : 'افصل بين المهارات بفواصل.'}
@@ -316,17 +352,21 @@ export default function Profile() {
                       onClick={() => {
                         setDraft(createDraft(profile, user?.name || ''));
                         setFieldErrors({});
-                        setStatusMessage('');
+                        setStatus(null);
                         setIsEditing(false);
                       }}
                     >
                       {isEnglish ? 'Cancel' : 'إلغاء'}
                     </Button>
-                    <Button disabled={isSaving} onClick={saveProfile}>
-                      {isSaving ? (
-                        <LoaderCircle className="me-2 size-4 animate-spin" />
-                      ) : null}
-                      {isSaving ? (isEnglish ? 'Saving...' : 'جار الحفظ...') : isEnglish ? 'Save Changes' : 'حفظ التعديلات'}
+                    <Button disabled={isSaving} onClick={() => void saveProfile()}>
+                      {isSaving ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
+                      {isSaving
+                        ? isEnglish
+                          ? 'Saving...'
+                          : 'جار الحفظ...'
+                        : isEnglish
+                          ? 'Save Changes'
+                          : 'حفظ التعديلات'}
                     </Button>
                   </div>
                 </CardContent>
@@ -335,11 +375,16 @@ export default function Profile() {
               <div className="grid gap-6 lg:grid-cols-2">
                 <Card>
                   <CardHeader>
-                    <CardTitle>{isEnglish ? 'Professional Summary' : 'الملخص المهني'}</CardTitle>
+                    <CardTitle>
+                      {isEnglish ? 'Professional Summary' : 'الملخص المهني'}
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="whitespace-pre-wrap leading-7 text-muted-foreground">
-                      {profile.description || (isEnglish ? 'No professional summary added yet.' : 'لم تتم إضافة ملخص مهني بعد.')}
+                      {profile.description ||
+                        (isEnglish
+                          ? 'No professional summary added yet.'
+                          : 'لم تتم إضافة ملخص مهني بعد.')}
                     </p>
                   </CardContent>
                 </Card>
@@ -350,7 +395,8 @@ export default function Profile() {
                   </CardHeader>
                   <CardContent>
                     <p className="whitespace-pre-wrap leading-7 text-muted-foreground">
-                      {profile.bio || (isEnglish ? 'No biography added yet.' : 'لم تتم إضافة نبذة بعد.')}
+                      {profile.bio ||
+                        (isEnglish ? 'No biography added yet.' : 'لم تتم إضافة نبذة بعد.')}
                     </p>
                   </CardContent>
                 </Card>

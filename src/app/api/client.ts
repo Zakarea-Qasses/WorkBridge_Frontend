@@ -10,11 +10,23 @@ export class ApiError extends Error {
   payload: LaravelErrorPayload;
 
   constructor(status: number, payload: LaravelErrorPayload) {
-    super(payload.message || getFriendlyErrorMessage(status));
+    super(getSafeErrorMessage(status, payload.message));
     this.name = 'ApiError';
     this.status = status;
     this.payload = payload;
   }
+}
+
+function getSafeErrorMessage(status: number, message?: string) {
+  const exposesServerDetails =
+    Boolean(message) &&
+    /SQLSTATE|select\s+.*\s+from|stack trace|exception|database:/i.test(message || '');
+
+  if (status >= 500 || exposesServerDetails) {
+    return getFriendlyErrorMessage(status);
+  }
+
+  return message || getFriendlyErrorMessage(status);
 }
 
 type ApiOptions = Omit<RequestInit, 'body'> & {
@@ -40,7 +52,7 @@ export function getFriendlyErrorMessage(status: number) {
     return 'The requested item was not found.';
   }
   if (status >= 500) {
-    return 'Something went wrong on the server. Please try again later.';
+    return 'تعذر إكمال الطلب بسبب مشكلة في الخادم. حاول مرة أخرى لاحقاً.';
   }
 
   return 'Something went wrong. Please try again.';

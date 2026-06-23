@@ -1,227 +1,288 @@
-import { Link } from 'react-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router';
 import {
+  AlertCircle,
   ArrowDownLeft,
   ArrowUpRight,
   CheckCircle2,
   Clock,
-  CreditCard,
-  TrendingUp,
+  RefreshCw,
   Wallet as WalletIcon,
 } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/app/components/ui';
+import { getApiErrorMessage } from '@/app/api/client';
+import { getMyWallet, type Wallet, type WalletTransaction } from '@/app/api/endpoints';
 import { useLanguage } from '@/app/providers/LanguageProvider';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui';
-import { getWalletData } from '@/app/storage';
 
-export default function Wallet() {
+function safeAmount(value: number | string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatAmount(value: number | string, isEnglish: boolean) {
+  const amount = safeAmount(value);
+  if (amount === null) return isEnglish ? 'Unavailable' : 'غير متاح';
+  return new Intl.NumberFormat(isEnglish ? 'en' : 'ar', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+function transactionTypeLabel(type: string, isEnglish: boolean) {
+  const labels: Record<string, [string, string]> = {
+    deposit: ['Deposit', 'إيداع'],
+    withdraw: ['Withdrawal', 'سحب'],
+    transfer_to_admin: ['Transfer to administration', 'تحويل إلى الإدارة'],
+    contract_fund: ['Contract funding', 'تمويل عقد'],
+    refund: ['Refund', 'استرداد'],
+    contract_payment: ['Contract payment', 'دفعة عقد'],
+  };
+  return labels[type]?.[isEnglish ? 0 : 1] || type.replaceAll('_', ' ');
+}
+
+function statusLabel(status: string, isEnglish: boolean) {
+  if (status === 'completed') return isEnglish ? 'Completed' : 'مكتملة';
+  return status.replaceAll('_', ' ');
+}
+
+function validDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export default function WalletPage() {
   const { isEnglish, language } = useLanguage();
-  const wallet = getWalletData();
-  const { balance, transactions } = wallet;
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [successMessage] = useState(
+    () => (location.state as { walletMessage?: string } | null)?.walletMessage || '',
+  );
 
-  const monthlyRevenue = transactions
-    .filter((transaction) => transaction.type === 'credit')
-    .reduce((sum, transaction) => sum + Math.max(transaction.amount, 0), 0);
+  const loadWallet = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setWallet(await getMyWallet());
+    } catch (requestError) {
+      setWallet(null);
+      setError(
+        getApiErrorMessage(requestError) ||
+          (isEnglish
+            ? 'Unable to load wallet information.'
+            : 'تعذر تحميل بيانات المحفظة'),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [isEnglish]);
 
-  const monthlyWithdrawals = transactions
-    .filter((transaction) => transaction.type === 'debit')
-    .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
+  useEffect(() => {
+    void loadWallet();
+  }, [loadWallet]);
 
-  const commissions = transactions
-    .filter((transaction) =>
-      transaction.description.toLowerCase().includes('commission') ||
-      transaction.description.includes('عمولة'),
-    )
-    .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
+  useEffect(() => {
+    if (successMessage) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, navigate, successMessage]);
+
+  const transactions = useMemo(
+    () =>
+      [...(wallet?.transactions || [])].sort(
+        (first, second) =>
+          (validDate(second.created_at)?.getTime() || 0) -
+          (validDate(first.created_at)?.getTime() || 0),
+      ),
+    [wallet?.transactions],
+  );
 
   return (
     <DashboardLayout>
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
-        <div>
-          <h1 className="text-3xl font-bold">{isEnglish ? 'Wallet' : 'المحفظة'}</h1>
-          <p className="mt-1 text-muted-foreground">
-            {isEnglish ? 'Manage your balance and financial transactions' : 'إدارة رصيدك ومعاملاتك المالية'}
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">{isEnglish ? 'Wallet' : 'المحفظة'}</h1>
+            <p className="mt-1 text-muted-foreground">
+              {isEnglish
+                ? 'Your real balance and financial transactions.'
+                : 'رصيدك الحقيقي وحركاتك المالية.'}
+            </p>
+          </div>
+          <Button variant="outline" disabled={loading} onClick={() => void loadWallet()}>
+            <RefreshCw className="me-2 size-4" />
+            {isEnglish ? 'Refresh' : 'تحديث'}
+          </Button>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          <Card className="bg-gradient-to-br from-blue-600 to-blue-800 text-white">
-            <CardHeader>
-              <p className="text-sm text-blue-100">{isEnglish ? 'Total balance' : 'الرصيد الكلي'}</p>
-              <CardTitle className="text-4xl">${balance.total.toLocaleString()}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2 text-blue-100">
+        {successMessage ? (
+          <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+            <CheckCircle2 className="size-4" />
+            {successMessage}
+          </div>
+        ) : null}
+
+        {loading ? (
+          <>
+            <div className="h-40 animate-pulse rounded-md bg-muted" />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="h-32 animate-pulse rounded-md bg-muted" />
+              <div className="h-32 animate-pulse rounded-md bg-muted" />
+            </div>
+            <div className="h-64 animate-pulse rounded-md bg-muted" />
+          </>
+        ) : error || !wallet ? (
+          <Card className="border-destructive/30">
+            <CardContent className="flex min-h-56 flex-col items-center justify-center gap-4 text-center">
+              <AlertCircle className="size-9 text-destructive" />
+              <p className="text-destructive">
+                {error || (isEnglish ? 'Wallet is unavailable.' : 'المحفظة غير متاحة')}
+              </p>
+              <Button variant="outline" onClick={() => void loadWallet()}>
+                {isEnglish ? 'Try again' : 'إعادة المحاولة'}
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <Card className="border-primary/20 bg-primary text-primary-foreground">
+              <CardHeader>
+                <p className="text-sm opacity-80">
+                  {isEnglish ? 'Current balance' : 'الرصيد الحالي'}
+                </p>
+                <CardTitle className="text-4xl">{formatAmount(wallet.balance, isEnglish)}</CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-center gap-2 opacity-80">
                 <WalletIcon className="size-5" />
                 <span className="text-sm">
-                  {isEnglish ? 'Total funds inside the wallet' : 'إجمالي الأرصدة داخل المحفظة'}
+                  {isEnglish
+                    ? 'Balance confirmed by the backend'
+                    : 'الرصيد المعتمد من النظام'}
                 </span>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader>
-              <p className="text-sm text-muted-foreground">{isEnglish ? 'Available balance' : 'الرصيد المتاح'}</p>
-              <CardTitle className="text-3xl text-green-600">${balance.available.toLocaleString()}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                {isEnglish ? 'Available for withdrawal or use' : 'متاح للسحب أو الاستخدام'}
-              </p>
-            </CardContent>
-          </Card>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{isEnglish ? 'Deposit' : 'إيداع رصيد'}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Button asChild className="w-full">
+                    <Link to="/wallet/top-up">
+                      <ArrowDownLeft className="me-2 size-4" />
+                      {isEnglish ? 'Deposit to wallet' : 'شحن المحفظة'}
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>{isEnglish ? 'Withdrawal' : 'سحب الرصيد'}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Button asChild variant="outline" className="w-full">
+                    <Link to="/wallet/withdraw">
+                      <ArrowUpRight className="me-2 size-4" />
+                      {isEnglish ? 'Withdraw from wallet' : 'سحب من المحفظة'}
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
 
-          <Card>
-            <CardHeader>
-              <p className="text-sm text-muted-foreground">{isEnglish ? 'Reserved balance' : 'الرصيد المحجوز'}</p>
-              <CardTitle className="text-3xl text-yellow-600">${balance.reserved.toLocaleString()}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                {isEnglish ? 'Reserved for active projects' : 'محجوز للمشاريع الجارية'}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card className="transition-shadow hover:shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>{isEnglish ? 'Add funds' : 'إضافة أموال'}</CardTitle>
-              </div>
-              <div className="rounded-full bg-green-100 p-3">
-                <ArrowDownLeft className="size-6 text-green-600" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Button asChild className="w-full">
-                <Link to="/wallet/top-up">{isEnglish ? 'Top up wallet' : 'شحن المحفظة'}</Link>
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="transition-shadow hover:shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>{isEnglish ? 'Withdraw funds' : 'سحب الأموال'}</CardTitle>
-              </div>
-              <div className="rounded-full bg-blue-100 p-3">
-                <ArrowUpRight className="size-6 text-blue-600" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Button asChild variant="outline" className="w-full">
-                <Link to="/wallet/withdraw">{isEnglish ? 'Withdraw money' : 'سحب الأموال'}</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm text-muted-foreground">{isEnglish ? 'Revenue' : 'الإيرادات'}</CardTitle>
-              <TrendingUp className="size-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">${monthlyRevenue.toLocaleString()}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm text-muted-foreground">{isEnglish ? 'Withdrawals' : 'المسحوبات'}</CardTitle>
-              <ArrowUpRight className="size-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">${monthlyWithdrawals.toLocaleString()}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm text-muted-foreground">{isEnglish ? 'Commissions' : 'العمولات'}</CardTitle>
-              <CreditCard className="size-4 text-yellow-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">${commissions.toLocaleString()}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm text-muted-foreground">{isEnglish ? 'Pending' : 'معلّق'}</CardTitle>
-              <Clock className="size-4 text-gray-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">${balance.reserved.toLocaleString()}</div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{isEnglish ? 'Transaction history' : 'سجل المعاملات'}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-right">{isEnglish ? 'Date' : 'التاريخ'}</TableHead>
-                  <TableHead className="text-right">{isEnglish ? 'Description' : 'الوصف'}</TableHead>
-                  <TableHead className="text-right">{isEnglish ? 'Amount' : 'المبلغ'}</TableHead>
-                  <TableHead className="text-right">{isEnglish ? 'Status' : 'الحالة'}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {transactions.map((transaction) => (
-                  <TableRow key={transaction.id}>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{transaction.date}</span>
-                        <span className="text-xs text-muted-foreground">{transaction.time}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {transaction.type === 'credit' ? (
-                          <ArrowDownLeft className="size-4 text-green-600" />
-                        ) : (
-                          <ArrowUpRight className="size-4 text-blue-600" />
-                        )}
-                        <span>{transaction.description}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`font-bold ${
-                          transaction.amount > 0 ? 'text-green-600' : 'text-foreground'
-                        }`}
-                      >
-                        {transaction.amount > 0 ? '+' : ''}
-                        ${transaction.amount.toLocaleString()}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {transaction.status === 'completed' ? (
-                        <Badge className="bg-green-500">
-                          <CheckCircle2 className="ml-1 size-3" />
-                          {isEnglish ? 'Completed' : 'مكتمل'}
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-yellow-500">
-                          <Clock className="ml-1 size-3" />
-                          {isEnglish ? 'Pending' : 'معلّق'}
-                        </Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>{isEnglish ? 'Transaction history' : 'سجل الحركات المالية'}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!transactions.length ? (
+                  <div className="py-10 text-center text-muted-foreground">
+                    {isEnglish
+                      ? 'No financial transactions yet.'
+                      : 'لا توجد حركات مالية حتى الآن'}
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{isEnglish ? 'Date' : 'التاريخ'}</TableHead>
+                        <TableHead>{isEnglish ? 'Type' : 'النوع'}</TableHead>
+                        <TableHead>{isEnglish ? 'Description' : 'الوصف'}</TableHead>
+                        <TableHead>{isEnglish ? 'Amount' : 'المبلغ'}</TableHead>
+                        <TableHead>{isEnglish ? 'Balance after' : 'الرصيد بعد العملية'}</TableHead>
+                        <TableHead>{isEnglish ? 'Status' : 'الحالة'}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {transactions.map((transaction: WalletTransaction) => {
+                        const date = validDate(transaction.created_at);
+                        return (
+                          <TableRow key={transaction.id}>
+                            <TableCell>
+                              {date
+                                ? new Intl.DateTimeFormat(isEnglish ? 'en' : 'ar', {
+                                    dateStyle: 'medium',
+                                    timeStyle: 'short',
+                                  }).format(date)
+                                : isEnglish ? 'Unavailable' : 'غير متاح'}
+                            </TableCell>
+                            <TableCell>{transactionTypeLabel(transaction.type, isEnglish)}</TableCell>
+                            <TableCell>{transaction.description || '-'}</TableCell>
+                            <TableCell
+                              className={
+                                transaction.direction === 'credit'
+                                  ? 'font-semibold text-green-700'
+                                  : 'font-semibold text-foreground'
+                              }
+                            >
+                              {transaction.direction === 'credit' ? '+' : '-'}
+                              {formatAmount(transaction.amount, isEnglish)}
+                            </TableCell>
+                            <TableCell>{formatAmount(transaction.balance_after, isEnglish)}</TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={
+                                  transaction.status === 'completed'
+                                    ? 'border-green-200 bg-green-50 text-green-700'
+                                    : 'border-amber-200 bg-amber-50 text-amber-800'
+                                }
+                              >
+                                {transaction.status === 'completed' ? (
+                                  <CheckCircle2 className="me-1 size-3" />
+                                ) : (
+                                  <Clock className="me-1 size-3" />
+                                )}
+                                {statusLabel(transaction.status, isEnglish)}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
     </DashboardLayout>
   );

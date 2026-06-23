@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { MessageSquare, RefreshCw } from 'lucide-react';
+import { Link, useNavigate } from 'react-router';
+import { LoaderCircle, MessageSquare, RefreshCw } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui';
+import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import {
   cancelContract,
   completeContract,
@@ -41,6 +42,7 @@ export function ContractsPage({ userType = 'user' }: { userType?: 'user' | 'comp
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [needsWalletTopUp, setNeedsWalletTopUp] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,12 +63,27 @@ export function ContractsPage({ userType = 'user' }: { userType?: 'user' | 'comp
   const runAction = async (contract: Contract, action: 'start' | 'complete' | 'cancel') => {
     try {
       setBusyId(contract.id);
+      setError('');
+      setNeedsWalletTopUp(false);
       if (action === 'start') await startContract(contract.id);
       else if (action === 'complete') await completeContract(contract.id);
       else await cancelContract(contract.id);
       await load();
-    } catch {
-      setError(isEnglish ? 'The contract could not be updated.' : 'تعذر تحديث العقد');
+    } catch (actionError) {
+      const validationErrors = getValidationErrors(actionError);
+      const validationMessage = Object.values(validationErrors).flat()[0];
+      const message = validationMessage || getApiErrorMessage(actionError);
+      const insufficientBalance =
+        Boolean(validationErrors.amount?.length) ||
+        message.toLowerCase().includes('balance') ||
+        message.includes('الرصيد') ||
+        message.includes('المحفظة');
+
+      setNeedsWalletTopUp(action === 'start' && insufficientBalance);
+      setError(
+        message ||
+          (isEnglish ? 'The contract could not be updated.' : 'تعذر تحديث العقد'),
+      );
     } finally {
       setBusyId(null);
     }
@@ -94,7 +111,20 @@ export function ContractsPage({ userType = 'user' }: { userType?: 'user' | 'comp
           <Button variant="outline" onClick={load}><RefreshCw className="me-2 size-4" />{isEnglish ? 'Refresh' : 'تحديث'}</Button>
         </div>
 
-        {error ? <Card className="border-destructive/30"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card> : null}
+        {error ? (
+          <Card className="border-destructive/30">
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm text-destructive">
+              <span>{error}</span>
+              {needsWalletTopUp ? (
+                <Button asChild size="sm">
+                  <Link to={userType === 'company' ? '/company/wallet/top-up' : '/wallet/top-up'}>
+                    {isEnglish ? 'Top up wallet' : 'شحن المحفظة'}
+                  </Link>
+                </Button>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
 
         {loading ? <div className="h-56 animate-pulse rounded-lg bg-muted" /> : contracts.length === 0 ? (
           <Card><CardContent className="py-12 text-center text-muted-foreground">{isEnglish ? 'No contracts yet.' : 'لا توجد عقود حتى الآن.'}</CardContent></Card>
@@ -110,7 +140,17 @@ export function ContractsPage({ userType = 'user' }: { userType?: 'user' | 'comp
                     <div className="grid gap-2 text-sm sm:grid-cols-2"><p>{isEnglish ? 'Amount:' : 'المبلغ:'} {contract.amount}</p><p>{isEnglish ? 'Provider net:' : 'صافي مقدم الخدمة:'} {contract.freelancer_amount}</p></div>
                     <div className="flex flex-wrap gap-2">
                       <Button variant="outline" disabled={busyId === contract.id} onClick={() => messageOtherParty(contract)}><MessageSquare className="me-2 size-4" />{isEnglish ? 'Message other party' : 'مراسلة الطرف الآخر'}</Button>
-                      {isClient && contract.status === 'pending' ? <Button disabled={busyId === contract.id} onClick={() => runAction(contract, 'start')}>{isEnglish ? 'Start contract' : 'بدء العقد'}</Button> : null}
+                      {isClient && contract.status === 'pending' ? (
+                        <Button
+                          disabled={busyId === contract.id}
+                          onClick={() => runAction(contract, 'start')}
+                        >
+                          {busyId === contract.id ? (
+                            <LoaderCircle className="me-2 size-4 animate-spin" />
+                          ) : null}
+                          {isEnglish ? 'Fund and start contract' : 'تمويل وبدء العقد'}
+                        </Button>
+                      ) : null}
                       {isClient && ['funded', 'in_progress'].includes(contract.status) ? <Button disabled={busyId === contract.id} onClick={() => runAction(contract, 'complete')}>{isEnglish ? 'Confirm completion' : 'تأكيد الإكمال'}</Button> : null}
                       {!['completed', 'canceled', 'refunded'].includes(contract.status) ? <Button variant="destructive" disabled={busyId === contract.id} onClick={() => runAction(contract, 'cancel')}>{isEnglish ? 'Cancel' : 'إلغاء'}</Button> : null}
                     </div>

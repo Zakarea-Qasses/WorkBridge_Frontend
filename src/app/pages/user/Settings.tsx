@@ -1,359 +1,861 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, CheckCircle2, LoaderCircle, Trash2 } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Switch,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  Textarea,
+} from '@/app/components/ui';
+import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
+import {
+  AdminSettings,
+  clearSettingsLocalData,
+  CompanyProfile,
+  ContactPermission,
+  getAdminSettings,
+  getCompany,
+  getProfile,
+  getUserSettings,
+  PersonalProfileResponse,
+  updateAdminSettings,
+  updateCompany,
+  updateNotificationSettings,
+  updatePassword,
+  updatePrivacySettings,
+  updateProfile,
+  UserSettings,
+} from '@/app/api/endpoints';
+import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Separator, Switch, Tabs, TabsContent, TabsList, TabsTrigger, Textarea } from '@/app/components/ui';
 
-function createStorageKeys(userType: 'user' | 'company' | 'admin') {
+type UserType = 'user' | 'company' | 'admin';
+type Status = { type: 'success' | 'error'; message: string } | null;
+
+interface ProfileDraft {
+  name: string;
+  title: string;
+  description: string;
+  location: string;
+  phone: string;
+  website: string;
+  skills: string;
+}
+
+interface PasswordDraft {
+  current_password: string;
+  password: string;
+  password_confirmation: string;
+}
+
+const emptyProfileDraft: ProfileDraft = {
+  name: '',
+  title: '',
+  description: '',
+  location: '',
+  phone: '',
+  website: '',
+  skills: '',
+};
+
+const emptyPasswordDraft: PasswordDraft = {
+  current_password: '',
+  password: '',
+  password_confirmation: '',
+};
+
+const defaultSettings: UserSettings = {
+  privacy: {
+    profile_visible: true,
+    contact_permission: 'all',
+  },
+  notifications: {
+    message_notifications: true,
+  },
+};
+
+const defaultAdminSettings: AdminSettings = {
+  critical_dispute_notifications: true,
+  company_verification_notifications: true,
+};
+
+function profileDraftFromPersonal(response: PersonalProfileResponse, fallbackName: string): ProfileDraft {
+  const profile = response.profile;
+
   return {
-    profile: `workbridge-${userType}-profile-settings`,
-    skills: `workbridge-${userType}-profile-skills`,
-    password: `workbridge-${userType}-account-password`,
+    name: profile.name || fallbackName || '',
+    title: profile.job_title || '',
+    description: profile.bio || profile.description || '',
+    location: profile.address || '',
+    phone: profile.phone || '',
+    website: '',
+    skills: profile.skills.map((skill) => skill.name).join(', '),
   };
 }
 
-function getDefaults(userType: 'user' | 'company' | 'admin') {
-  if (userType === 'company') {
-    return {
-      profile: {
-        fullName: 'Work Bridge Labs',
-        title: 'حساب شركة',
-        bio: 'شركة متخصصة في المنتجات الرقمية والتوظيف التقني.',
-        location: 'دمشق - سوريا',
-        phone: '+963 11 123 4567',
-      },
-      skills: 'التوظيف, إدارة الموارد البشرية, المنتجات الرقمية',
-    };
-  }
-
-  if (userType === 'admin') {
-    return {
-      profile: {
-        fullName: 'أدمن المنصة',
-        title: 'إدارة النظام',
-        bio: 'إدارة الحسابات والمشاريع والنزاعات والإشراف على تشغيل المنصة.',
-        location: 'لوحة التحكم',
-        phone: '+000 000 000',
-      },
-      skills: 'إدارة, مراجعة, دعم, تقارير',
-    };
-  }
-
+function profileDraftFromCompany(company: CompanyProfile): ProfileDraft {
   return {
-    profile: {
-      fullName: 'أحمد محمد',
-      title: 'مطور Full Stack',
-      bio: 'مطور Full Stack محترف مع خبرة 5 سنوات.',
-      location: 'الرياض، السعودية',
-      phone: '+966 50 123 4567',
-    },
-    skills: 'React, Node.js, TypeScript, MongoDB',
+    name: company.company_name || '',
+    title: '',
+    description: company.description || '',
+    location: company.location || '',
+    phone: company.phone || '',
+    website: company.website || '',
+    skills: company.skills.map((skill) => skill.name).join(', '),
   };
 }
 
-function readStorageValue<T>(key: string, fallback: T) {
-  if (typeof window === 'undefined') {
-    return fallback;
-  }
-
-  const raw = window.localStorage.getItem(key);
-  if (!raw) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
+function splitSkills(value: string) {
+  return value
+    .split(',')
+    .map((skill) => skill.trim())
+    .filter(Boolean);
 }
 
-export function SettingsPage({ userType = 'user' }: { userType?: 'user' | 'company' | 'admin' }) {
-  const navigate = useNavigate();
-  const { isEnglish, language } = useLanguage();
-  const keys = useMemo(() => createStorageKeys(userType), [userType]);
-  const defaults = useMemo(() => getDefaults(userType), [userType]);
+function getTitle(userType: UserType, isEnglish: boolean) {
+  if (userType === 'company') return isEnglish ? 'Company Settings' : 'إعدادات الشركة';
+  if (userType === 'admin') return isEnglish ? 'Admin Settings' : 'إعدادات الإدارة';
+  return isEnglish ? 'Settings' : 'الإعدادات';
+}
 
-  const [profileSettings, setProfileSettings] = useState(defaults.profile);
-  const [skills, setSkills] = useState(defaults.skills);
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
-  const [profileMessage, setProfileMessage] = useState('');
-  const [skillsMessage, setSkillsMessage] = useState('');
-  const [passwordMessage, setPasswordMessage] = useState('');
-  const [deleteMessage, setDeleteMessage] = useState('');
-
-  useEffect(() => {
-    setProfileSettings(readStorageValue(keys.profile, defaults.profile));
-    setSkills(readStorageValue(keys.skills, defaults.skills));
-  }, [defaults.profile, defaults.skills, keys.profile, keys.skills]);
-
-  const handleSaveProfileChanges = () => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    window.localStorage.setItem(keys.profile, JSON.stringify(profileSettings));
-    setProfileMessage(isEnglish ? 'Profile changes saved successfully.' : 'تم حفظ التغييرات الشخصية بنجاح.');
-  };
-
-  const handleUpdateSkills = () => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    window.localStorage.setItem(keys.skills, JSON.stringify(skills));
-    setSkillsMessage(isEnglish ? 'Skills updated successfully.' : 'تم تحديث المهارات بنجاح.');
-  };
-
-  const handleUpdatePassword = () => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
-      setPasswordMessage(isEnglish ? 'Please fill all password fields.' : 'يرجى تعبئة جميع حقول كلمة المرور.');
-      return;
-    }
-
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setPasswordMessage(isEnglish ? 'New password and confirmation do not match.' : 'كلمة المرور الجديدة وتأكيدها غير متطابقين.');
-      return;
-    }
-
-    if (passwordForm.newPassword.length < 6) {
-      setPasswordMessage(isEnglish ? 'The new password must be at least 6 characters.' : 'يجب أن تكون كلمة المرور الجديدة 6 أحرف على الأقل.');
-      return;
-    }
-
-    window.localStorage.setItem(keys.password, JSON.stringify(passwordForm.newPassword));
-    setPasswordForm({
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
-    });
-    setPasswordMessage(isEnglish ? 'Password updated locally successfully.' : 'تم تحديث كلمة المرور محليًا بنجاح.');
-  };
-
-  const handleDeleteAccount = () => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    window.localStorage.removeItem(keys.profile);
-    window.localStorage.removeItem(keys.skills);
-    window.localStorage.removeItem(keys.password);
-    setDeleteMessage(isEnglish ? 'Local data for this account was removed from the interface.' : 'تم حذف بيانات هذا الحساب المحلي من الواجهة.');
-    navigate('/login');
-  };
+function StatusMessage({ status }: { status: Status }) {
+  if (!status) return null;
 
   return (
-    <DashboardLayout userType={userType}>
+    <div
+      className={`flex items-center gap-2 rounded-md border px-4 py-3 text-sm ${
+        status.type === 'success'
+          ? 'border-green-200 bg-green-50 text-green-700'
+          : 'border-destructive/30 bg-destructive/5 text-destructive'
+      }`}
+    >
+      {status.type === 'success' ? (
+        <CheckCircle2 className="size-4 shrink-0" />
+      ) : (
+        <AlertCircle className="size-4 shrink-0" />
+      )}
+      {status.message}
+    </div>
+  );
+}
+
+export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
+  const { isEnglish, language } = useLanguage();
+  const { user, refreshUser } = useAuth();
+  const [profileDraft, setProfileDraft] = useState<ProfileDraft>(emptyProfileDraft);
+  const [settings, setSettings] = useState<UserSettings>(defaultSettings);
+  const [adminSettings, setAdminSettings] = useState<AdminSettings>(defaultAdminSettings);
+  const [passwordDraft, setPasswordDraft] = useState<PasswordDraft>(emptyPasswordDraft);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const [status, setStatus] = useState<Status>(null);
+  const [loading, setLoading] = useState(true);
+  const requestIdRef = useRef(0);
+  const [savingSection, setSavingSection] = useState<
+    'profile' | 'password' | 'privacy' | 'notifications' | 'admin' | 'clear' | null
+  >(null);
+
+  const dashboardType = userType;
+  const isAdmin = userType === 'admin';
+  const isCompany = userType === 'company';
+
+  const loadSettings = useCallback(async () => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+
+    setLoading(true);
+    setStatus(null);
+    setFieldErrors({});
+    setProfileDraft(emptyProfileDraft);
+    setPasswordDraft(emptyPasswordDraft);
+
+    try {
+      if (isAdmin) {
+        const adminResponse = await getAdminSettings();
+        if (requestId !== requestIdRef.current) return;
+        setAdminSettings(adminResponse);
+        return;
+      }
+
+      const [settingsResponse, profileResponse] = await Promise.all([
+        getUserSettings(),
+        isCompany ? getCompany<CompanyProfile>() : getProfile(),
+      ]);
+
+      if (requestId !== requestIdRef.current) return;
+
+      setSettings(settingsResponse);
+      setProfileDraft(
+        isCompany
+          ? profileDraftFromCompany(profileResponse as CompanyProfile)
+          : profileDraftFromPersonal(profileResponse as PersonalProfileResponse, user?.name || ''),
+      );
+    } catch (error) {
+      if (requestId !== requestIdRef.current) return;
+      setStatus({
+        type: 'error',
+        message:
+          getApiErrorMessage(error) ||
+          (isEnglish ? 'Could not load settings.' : 'تعذر تحميل الإعدادات'),
+      });
+    } finally {
+      if (requestId === requestIdRef.current) setLoading(false);
+    }
+  }, [isAdmin, isCompany, isEnglish, user?.name]);
+
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings, user?.id]);
+
+  const updateProfileField = (field: keyof ProfileDraft, value: string) => {
+    setProfileDraft((current) => ({ ...current, [field]: value }));
+    setFieldErrors((current) => ({ ...current, [field]: [] }));
+  };
+
+  const updatePasswordField = (field: keyof PasswordDraft, value: string) => {
+    setPasswordDraft((current) => ({ ...current, [field]: value }));
+    setFieldErrors((current) => ({ ...current, [field]: [] }));
+  };
+
+  const saveProfile = async () => {
+    if (!profileDraft.name.trim()) {
+      setFieldErrors({ name: [isEnglish ? 'Name is required.' : 'الاسم مطلوب.'] });
+      return;
+    }
+
+    try {
+      setSavingSection('profile');
+      setStatus(null);
+      setFieldErrors({});
+
+      if (isCompany) {
+        const updated = await updateCompany({
+          company_name: profileDraft.name.trim(),
+          website: profileDraft.website.trim() || null,
+          location: profileDraft.location.trim() || null,
+          description: profileDraft.description.trim() || null,
+          phone: profileDraft.phone.trim() || null,
+          skills: splitSkills(profileDraft.skills),
+        });
+        setProfileDraft(profileDraftFromCompany(updated));
+      } else {
+        const updated = await updateProfile({
+          name: profileDraft.name.trim(),
+          job_title: profileDraft.title.trim() || null,
+          phone: profileDraft.phone.trim() || null,
+          address: profileDraft.location.trim() || null,
+          description: profileDraft.description.trim() || null,
+          bio: profileDraft.description.trim() || null,
+          skills: splitSkills(profileDraft.skills),
+        });
+        setProfileDraft(
+          profileDraftFromPersonal(
+            { profile: updated, rating_avg: 0, reviews_count: 0 },
+            profileDraft.name.trim(),
+          ),
+        );
+      }
+
+      await refreshUser();
+      setStatus({
+        type: 'success',
+        message: isCompany
+          ? isEnglish
+            ? 'Company settings saved successfully.'
+            : 'تم حفظ إعدادات الشركة بنجاح'
+          : isEnglish
+            ? 'Personal profile settings saved successfully.'
+            : 'تم حفظ إعدادات الملف الشخصي بنجاح',
+      });
+    } catch (error) {
+      setFieldErrors(getValidationErrors(error));
+      setStatus({
+        type: 'error',
+        message: isCompany
+          ? isEnglish
+            ? 'Could not save company settings.'
+            : 'تعذر حفظ إعدادات الشركة'
+          : isEnglish
+            ? 'Could not save personal profile settings.'
+            : 'تعذر حفظ إعدادات الملف الشخصي',
+      });
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  const savePassword = async () => {
+    try {
+      setSavingSection('password');
+      setStatus(null);
+      setFieldErrors({});
+      await updatePassword(passwordDraft);
+      setPasswordDraft(emptyPasswordDraft);
+      setStatus({
+        type: 'success',
+        message: isEnglish
+          ? 'Password updated successfully.'
+          : 'تم تحديث كلمة المرور بنجاح',
+      });
+    } catch (error) {
+      setFieldErrors(getValidationErrors(error));
+      setStatus({
+        type: 'error',
+        message: getApiErrorMessage(error) || (isEnglish ? 'Could not update password.' : 'تعذر تحديث كلمة المرور'),
+      });
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  const savePrivacy = async () => {
+    try {
+      setSavingSection('privacy');
+      setStatus(null);
+      setFieldErrors({});
+      const updated = await updatePrivacySettings(settings.privacy);
+      setSettings(updated);
+      setStatus({
+        type: 'success',
+        message: isEnglish ? 'Privacy settings saved.' : 'تم حفظ إعدادات الخصوصية',
+      });
+    } catch (error) {
+      setFieldErrors(getValidationErrors(error));
+      setStatus({
+        type: 'error',
+        message: getApiErrorMessage(error) || (isEnglish ? 'Could not save privacy settings.' : 'تعذر حفظ إعدادات الخصوصية'),
+      });
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  const saveNotifications = async () => {
+    try {
+      setSavingSection('notifications');
+      setStatus(null);
+      setFieldErrors({});
+      const updated = await updateNotificationSettings(settings.notifications);
+      setSettings(updated);
+      setStatus({
+        type: 'success',
+        message: isEnglish
+          ? 'Notification preferences saved.'
+          : 'تم حفظ تفضيلات الإشعارات',
+      });
+    } catch (error) {
+      setFieldErrors(getValidationErrors(error));
+      setStatus({
+        type: 'error',
+        message: getApiErrorMessage(error) || (isEnglish ? 'Could not save notification preferences.' : 'تعذر حفظ تفضيلات الإشعارات'),
+      });
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  const saveAdminSettings = async () => {
+    try {
+      setSavingSection('admin');
+      setStatus(null);
+      const updated = await updateAdminSettings(adminSettings);
+      setAdminSettings(updated);
+      setStatus({
+        type: 'success',
+        message: isEnglish ? 'Admin settings saved successfully.' : 'تم حفظ إعدادات الإدارة بنجاح.',
+      });
+    } catch (error) {
+      setStatus({ type: 'error', message: getApiErrorMessage(error) });
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  const clearLocalData = async () => {
+    const confirmed = window.confirm(
+      isEnglish
+        ? 'Are you sure you want to clear local data?'
+        : 'هل أنت متأكد من مسح البيانات المحلية؟',
+    );
+    if (!confirmed) return;
+
+    try {
+      setSavingSection('clear');
+      setStatus(null);
+      const response = await clearSettingsLocalData();
+      setStatus({
+        type: 'success',
+        message: `${isEnglish ? 'Data cleared successfully.' : 'تم مسح البيانات بنجاح'} (${response.deleted_notifications})`,
+      });
+    } catch (error) {
+      setStatus({ type: 'error', message: getApiErrorMessage(error) });
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  const contactOptions = useMemo(
+    () => [
+      { value: 'all', label: isEnglish ? 'Everyone' : 'الجميع' },
+      { value: 'verified', label: isEnglish ? 'Verified only' : 'الموثقون فقط' },
+      { value: 'none', label: isEnglish ? 'No one' : 'لا أحد' },
+    ],
+    [isEnglish],
+  );
+
+  return (
+    <DashboardLayout userType={dashboardType}>
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <div>
-          <h1 className="text-3xl font-bold">
-            {userType === 'company'
-              ? isEnglish ? 'Company Settings' : 'إعدادات الشركة'
-              : userType === 'admin'
-                ? isEnglish ? 'Admin Settings' : 'إعدادات الأدمن'
-                : isEnglish ? 'Settings' : 'الإعدادات'}
-          </h1>
+          <h1 className="text-3xl font-bold">{getTitle(userType, isEnglish)}</h1>
           <p className="mt-1 text-muted-foreground">
             {isEnglish
-              ? 'Manage the settings and preferences of this account independently.'
-              : 'إدارة إعدادات هذا الحساب وتفضيلاته بشكل مستقل.'}
+              ? 'Manage account settings through the backend.'
+              : 'إدارة إعدادات الحساب من خلال الباك.'}
           </p>
         </div>
 
-        <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="profile">{isEnglish ? 'Profile' : 'الملف'}</TabsTrigger>
-            <TabsTrigger value="account">{isEnglish ? 'Account' : 'الحساب'}</TabsTrigger>
-            <TabsTrigger value="notifications">{isEnglish ? 'Notifications' : 'الإشعارات'}</TabsTrigger>
-            <TabsTrigger value="privacy">{isEnglish ? 'Privacy' : 'الخصوصية'}</TabsTrigger>
-          </TabsList>
+        <StatusMessage status={status} />
 
-          <TabsContent value="profile" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{isEnglish ? 'Basic Information' : 'المعلومات الأساسية'}</CardTitle>
-                <CardDescription>{isEnglish ? 'Update the visible data of this account.' : 'حدّث بيانات هذا الحساب الظاهرة في الواجهة.'}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fullname">{isEnglish ? 'Name' : 'الاسم'}</Label>
-                  <Input
-                    id="fullname"
-                    value={profileSettings.fullName}
-                    onChange={(event) => setProfileSettings((current) => ({ ...current, fullName: event.target.value }))}
-                    className="bg-input-background"
-                  />
+        {loading ? (
+          <Card>
+            <CardContent className="flex min-h-56 items-center justify-center gap-3 text-muted-foreground">
+              <LoaderCircle className="size-6 animate-spin text-primary" />
+              {isEnglish ? 'Loading settings...' : 'جاري تحميل الإعدادات...'}
+            </CardContent>
+          </Card>
+        ) : isAdmin ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>{isEnglish ? 'Administrative alerts' : 'تنبيهات الإدارة'}</CardTitle>
+              <CardDescription>
+                {isEnglish
+                  ? 'Saved through /admin/settings.'
+                  : 'يتم حفظها عبر /admin/settings.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="flex items-center justify-between gap-4 rounded-md border p-4">
+                <div>
+                  <p className="font-medium">
+                    {isEnglish ? 'Critical dispute alerts' : 'تنبيهات النزاعات الحرجة'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {isEnglish
+                      ? 'Notify admins about high priority disputes.'
+                      : 'إشعار الإدارة بالنزاعات عالية الأولوية.'}
+                  </p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="title">{isEnglish ? 'Title' : 'الوصف'}</Label>
-                  <Input
-                    id="title"
-                    value={profileSettings.title}
-                    onChange={(event) => setProfileSettings((current) => ({ ...current, title: event.target.value }))}
-                    className="bg-input-background"
-                  />
+                <Switch
+                  checked={adminSettings.critical_dispute_notifications}
+                  onCheckedChange={(value) =>
+                    setAdminSettings((current) => ({
+                      ...current,
+                      critical_dispute_notifications: value,
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4 rounded-md border p-4">
+                <div>
+                  <p className="font-medium">
+                    {isEnglish ? 'Company verification alerts' : 'تنبيهات توثيق الشركات'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {isEnglish
+                      ? 'Notify admins about company verification requests.'
+                      : 'إشعار الإدارة بطلبات توثيق الشركات.'}
+                  </p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="bio">{isEnglish ? 'Bio' : 'نبذة'}</Label>
-                  <Textarea
-                    id="bio"
-                    rows={4}
-                    value={profileSettings.bio}
-                    onChange={(event) => setProfileSettings((current) => ({ ...current, bio: event.target.value }))}
-                    className="resize-none bg-input-background"
-                  />
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
+                <Switch
+                  checked={adminSettings.company_verification_notifications}
+                  onCheckedChange={(value) =>
+                    setAdminSettings((current) => ({
+                      ...current,
+                      company_verification_notifications: value,
+                    }))
+                  }
+                />
+              </div>
+
+              <Button disabled={savingSection === 'admin'} onClick={saveAdminSettings}>
+                {savingSection === 'admin' ? (
+                  <LoaderCircle className="me-2 size-4 animate-spin" />
+                ) : null}
+                {isEnglish ? 'Save settings' : 'حفظ الإعدادات'}
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <Tabs defaultValue="profile" className="space-y-6">
+            <TabsList>
+              <TabsTrigger value="profile">{isEnglish ? 'Profile' : 'الملف'}</TabsTrigger>
+              <TabsTrigger value="password">
+                {isEnglish ? 'Password' : 'كلمة المرور'}
+              </TabsTrigger>
+              <TabsTrigger value="privacy">{isEnglish ? 'Privacy' : 'الخصوصية'}</TabsTrigger>
+              <TabsTrigger value="notifications">
+                {isEnglish ? 'Notifications' : 'الإشعارات'}
+              </TabsTrigger>
+              <TabsTrigger value="local-data">
+                {isEnglish ? 'Local Data' : 'البيانات المحلية'}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="profile">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{isEnglish ? 'Basic information' : 'المعلومات الأساسية'}</CardTitle>
+                  <CardDescription>
+                    {isCompany
+                      ? isEnglish
+                        ? 'Saved through PUT /company.'
+                        : 'يتم حفظها عبر PUT /company.'
+                      : isEnglish
+                        ? 'Saved through PUT /profile.'
+                        : 'يتم حفظها عبر PUT /profile.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="location">{isEnglish ? 'Location' : 'الموقع'}</Label>
+                    <Label htmlFor="settings-name">
+                      {isCompany
+                        ? isEnglish
+                          ? 'Company name'
+                          : 'اسم الشركة'
+                        : isEnglish
+                          ? 'Name'
+                          : 'الاسم'}
+                    </Label>
                     <Input
-                      id="location"
-                      value={profileSettings.location}
-                      onChange={(event) => setProfileSettings((current) => ({ ...current, location: event.target.value }))}
-                      className="bg-input-background"
+                      id="settings-name"
+                      value={profileDraft.name}
+                      onChange={(event) => updateProfileField('name', event.target.value)}
+                    />
+                    {(fieldErrors.name?.[0] || fieldErrors.company_name?.[0]) ? (
+                      <p className="text-xs text-destructive">
+                        {fieldErrors.name?.[0] || fieldErrors.company_name?.[0]}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {!isCompany ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="settings-title">
+                        {isEnglish ? 'Professional title' : 'المسمى المهني'}
+                      </Label>
+                      <Input
+                        id="settings-title"
+                        value={profileDraft.title}
+                        onChange={(event) => updateProfileField('title', event.target.value)}
+                      />
+                    </div>
+                  ) : null}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="settings-description">
+                      {isEnglish ? 'Description' : 'الوصف'}
+                    </Label>
+                    <Textarea
+                      id="settings-description"
+                      rows={4}
+                      value={profileDraft.description}
+                      onChange={(event) => updateProfileField('description', event.target.value)}
                     />
                   </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="settings-location">
+                        {isCompany
+                          ? isEnglish
+                            ? 'Location'
+                            : 'الموقع'
+                          : isEnglish
+                            ? 'Address'
+                            : 'العنوان'}
+                      </Label>
+                      <Input
+                        id="settings-location"
+                        value={profileDraft.location}
+                        onChange={(event) => updateProfileField('location', event.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="settings-phone">{isEnglish ? 'Phone' : 'الهاتف'}</Label>
+                      <Input
+                        id="settings-phone"
+                        value={profileDraft.phone}
+                        onChange={(event) => updateProfileField('phone', event.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {isCompany ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="settings-website">
+                        {isEnglish ? 'Website' : 'الموقع الإلكتروني'}
+                      </Label>
+                      <Input
+                        id="settings-website"
+                        value={profileDraft.website}
+                        onChange={(event) => updateProfileField('website', event.target.value)}
+                      />
+                      {fieldErrors.website?.[0] ? (
+                        <p className="text-xs text-destructive">{fieldErrors.website[0]}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <div className="space-y-2">
-                    <Label htmlFor="phone">{isEnglish ? 'Phone' : 'الهاتف'}</Label>
+                    <Label htmlFor="settings-skills">
+                      {isEnglish ? 'Skills separated by commas' : 'المهارات مفصولة بفواصل'}
+                    </Label>
                     <Input
-                      id="phone"
-                      value={profileSettings.phone}
-                      onChange={(event) => setProfileSettings((current) => ({ ...current, phone: event.target.value }))}
-                      className="bg-input-background"
+                      id="settings-skills"
+                      value={profileDraft.skills}
+                      onChange={(event) => updateProfileField('skills', event.target.value)}
                     />
                   </div>
-                </div>
-                {profileMessage ? <p className="text-sm text-green-600">{profileMessage}</p> : null}
-                <Button onClick={handleSaveProfileChanges}>{isEnglish ? 'Save Changes' : 'حفظ التغييرات'}</Button>
-              </CardContent>
-            </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>{isEnglish ? 'Skills or Domains' : 'المهارات أو المجالات'}</CardTitle>
-                <CardDescription>{isEnglish ? 'Add the fields or skills related to this account.' : 'أضف المجالات أو المهارات الخاصة بهذا الحساب.'}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="skills">{isEnglish ? 'Values separated by commas' : 'القيم مفصولة بفواصل'}</Label>
+                  <Button disabled={savingSection === 'profile'} onClick={saveProfile}>
+                    {savingSection === 'profile' ? (
+                      <LoaderCircle className="me-2 size-4 animate-spin" />
+                    ) : null}
+                    {isEnglish ? 'Save changes' : 'حفظ التغييرات'}
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="password">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{isEnglish ? 'Change password' : 'تغيير كلمة المرور'}</CardTitle>
+                  <CardDescription>
+                    {isEnglish
+                      ? 'Saved through PUT /settings/password.'
+                      : 'يتم حفظها عبر PUT /settings/password.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <Input
-                    id="skills"
-                    value={skills}
-                    onChange={(event) => setSkills(event.target.value)}
-                    className="bg-input-background"
+                    type="password"
+                    autoComplete="current-password"
+                    placeholder={isEnglish ? 'Current password' : 'كلمة المرور الحالية'}
+                    value={passwordDraft.current_password}
+                    onChange={(event) =>
+                      updatePasswordField('current_password', event.target.value)
+                    }
                   />
-                </div>
-                {skillsMessage ? <p className="text-sm text-green-600">{skillsMessage}</p> : null}
-                <Button onClick={handleUpdateSkills}>{isEnglish ? 'Update' : 'تحديث'}</Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                  {fieldErrors.current_password?.[0] ? (
+                    <p className="text-xs text-destructive">{fieldErrors.current_password[0]}</p>
+                  ) : null}
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={isEnglish ? 'New password' : 'كلمة المرور الجديدة'}
+                    value={passwordDraft.password}
+                    onChange={(event) => updatePasswordField('password', event.target.value)}
+                  />
+                  {fieldErrors.password?.[0] ? (
+                    <p className="text-xs text-destructive">{fieldErrors.password[0]}</p>
+                  ) : null}
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={isEnglish ? 'Confirm new password' : 'تأكيد كلمة المرور'}
+                    value={passwordDraft.password_confirmation}
+                    onChange={(event) =>
+                      updatePasswordField('password_confirmation', event.target.value)
+                    }
+                  />
+                  {fieldErrors.password_confirmation?.[0] ? (
+                    <p className="text-xs text-destructive">
+                      {fieldErrors.password_confirmation[0]}
+                    </p>
+                  ) : null}
+                  <Button disabled={savingSection === 'password'} onClick={savePassword}>
+                    {savingSection === 'password' ? (
+                      <LoaderCircle className="me-2 size-4 animate-spin" />
+                    ) : null}
+                    {isEnglish ? 'Update password' : 'تحديث كلمة المرور'}
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <TabsContent value="account" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{isEnglish ? 'Change Password' : 'تغيير كلمة المرور'}</CardTitle>
-                <CardDescription>{isEnglish ? 'Update the password for this account.' : 'تحديث كلمة مرور هذا الحساب.'}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Input
-                  type="password"
-                  placeholder={isEnglish ? 'Current Password' : 'كلمة المرور الحالية'}
-                  value={passwordForm.currentPassword}
-                  onChange={(event) => setPasswordForm((current) => ({ ...current, currentPassword: event.target.value }))}
-                  className="bg-input-background"
-                />
-                <Input
-                  type="password"
-                  placeholder={isEnglish ? 'New Password' : 'كلمة المرور الجديدة'}
-                  value={passwordForm.newPassword}
-                  onChange={(event) => setPasswordForm((current) => ({ ...current, newPassword: event.target.value }))}
-                  className="bg-input-background"
-                />
-                <Input
-                  type="password"
-                  placeholder={isEnglish ? 'Confirm Password' : 'تأكيد كلمة المرور'}
-                  value={passwordForm.confirmPassword}
-                  onChange={(event) => setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))}
-                  className="bg-input-background"
-                />
-                {passwordMessage ? <p className="text-sm text-green-600">{passwordMessage}</p> : null}
-                <Button onClick={handleUpdatePassword}>{isEnglish ? 'Update Password' : 'تحديث كلمة المرور'}</Button>
-              </CardContent>
-            </Card>
-
-            <Card className="border-destructive">
-              <CardHeader>
-                <CardTitle className="text-destructive">{isEnglish ? 'Delete Account Data' : 'حذف بيانات الحساب'}</CardTitle>
-                <CardDescription>{isEnglish ? 'Deletes only local data for this role.' : 'يحذف البيانات المحلية الخاصة بهذا الدور فقط.'}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {deleteMessage ? <p className="mb-3 text-sm text-destructive">{deleteMessage}</p> : null}
-                <Button variant="destructive" onClick={handleDeleteAccount}>
-                  {isEnglish ? 'Delete Data' : 'حذف البيانات'}
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="notifications" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{isEnglish ? 'Notification Settings' : 'إعدادات الإشعارات'}</CardTitle>
-                <CardDescription>{isEnglish ? 'Receive message notifications only.' : 'استقبال إشعارات الرسائل فقط.'}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">{isEnglish ? 'Message Notifications' : 'إشعارات الرسائل'}</p>
-                    <p className="text-sm text-muted-foreground">{isEnglish ? 'Receive alerts when new messages arrive' : 'تلقي تنبيهات عند وصول رسائل جديدة'}</p>
+            <TabsContent value="privacy">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{isEnglish ? 'Privacy settings' : 'إعدادات الخصوصية'}</CardTitle>
+                  <CardDescription>
+                    {isEnglish
+                      ? 'Loaded from GET /settings and saved through PUT /settings/privacy.'
+                      : 'يتم تحميلها من GET /settings وحفظها عبر PUT /settings/privacy.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="flex items-center justify-between gap-4 rounded-md border p-4">
+                    <div>
+                      <p className="font-medium">
+                        {isEnglish ? 'Show profile' : 'إظهار الملف الشخصي'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {isEnglish
+                          ? 'Allow your public profile to be visible.'
+                          : 'السماح بظهور ملفك العام.'}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={settings.privacy.profile_visible}
+                      onCheckedChange={(value) =>
+                        setSettings((current) => ({
+                          ...current,
+                          privacy: { ...current.privacy, profile_visible: value },
+                        }))
+                      }
+                    />
                   </div>
-                  <Switch defaultChecked />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
-          <TabsContent value="privacy" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{isEnglish ? 'Privacy Settings' : 'إعدادات الخصوصية'}</CardTitle>
-                <CardDescription>{isEnglish ? 'Control visibility and communication for this account.' : 'ضبط الرؤية والتواصل لهذا الحساب.'}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">{isEnglish ? 'Show Profile' : 'إظهار الملف'}</p>
-                    <p className="text-sm text-muted-foreground">{isEnglish ? 'Allow account information to be visible' : 'السماح بعرض بيانات الحساب'}</p>
+                  <div className="space-y-2">
+                    <Label>{isEnglish ? 'Who can contact you' : 'من يمكنه التواصل معك'}</Label>
+                    <Select
+                      value={settings.privacy.contact_permission}
+                      onValueChange={(value) =>
+                        setSettings((current) => ({
+                          ...current,
+                          privacy: {
+                            ...current.privacy,
+                            contact_permission: value as ContactPermission,
+                          },
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {contactOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {fieldErrors.contact_permission?.[0] ? (
+                      <p className="text-xs text-destructive">
+                        {fieldErrors.contact_permission[0]}
+                      </p>
+                    ) : null}
                   </div>
-                  <Switch defaultChecked />
-                </div>
-                <Separator />
-                <div className="space-y-2">
-                  <Label>{isEnglish ? 'Who can contact you' : 'من يمكنه التواصل معك'}</Label>
-                  <Select defaultValue="all">
-                    <SelectTrigger className="bg-input-background">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{isEnglish ? 'Everyone' : 'الجميع'}</SelectItem>
-                      <SelectItem value="verified">{isEnglish ? 'Verified Only' : 'الموثقون فقط'}</SelectItem>
-                      <SelectItem value="none">{isEnglish ? 'No One' : 'لا أحد'}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+
+                  <Button disabled={savingSection === 'privacy'} onClick={savePrivacy}>
+                    {savingSection === 'privacy' ? (
+                      <LoaderCircle className="me-2 size-4 animate-spin" />
+                    ) : null}
+                    {isEnglish ? 'Save privacy' : 'حفظ الخصوصية'}
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="notifications">
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    {isEnglish ? 'Notification preferences' : 'تفضيلات الإشعارات'}
+                  </CardTitle>
+                  <CardDescription>
+                    {isEnglish
+                      ? 'Loaded from GET /settings and saved through PUT /settings/notifications.'
+                      : 'يتم تحميلها من GET /settings وحفظها عبر PUT /settings/notifications.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="flex items-center justify-between gap-4 rounded-md border p-4">
+                    <div>
+                      <p className="font-medium">
+                        {isEnglish ? 'Message notifications' : 'إشعارات الرسائل'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {isEnglish
+                          ? 'Receive alerts when new messages arrive.'
+                          : 'تلقي تنبيهات عند وصول رسائل جديدة.'}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={settings.notifications.message_notifications}
+                      onCheckedChange={(value) =>
+                        setSettings((current) => ({
+                          ...current,
+                          notifications: {
+                            ...current.notifications,
+                            message_notifications: value,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <Button
+                    disabled={savingSection === 'notifications'}
+                    onClick={saveNotifications}
+                  >
+                    {savingSection === 'notifications' ? (
+                      <LoaderCircle className="me-2 size-4 animate-spin" />
+                    ) : null}
+                    {isEnglish ? 'Save notifications' : 'حفظ الإشعارات'}
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="local-data">
+              <Card className="border-destructive/30">
+                <CardHeader>
+                  <CardTitle className="text-destructive">
+                    {isEnglish ? 'Clear local data' : 'مسح البيانات المحلية'}
+                  </CardTitle>
+                  <CardDescription>
+                    {isEnglish
+                      ? 'This backend endpoint currently deletes your notifications.'
+                      : 'هذا endpoint في الباك يقوم حالياً بحذف إشعاراتك.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    variant="destructive"
+                    disabled={savingSection === 'clear'}
+                    onClick={clearLocalData}
+                  >
+                    {savingSection === 'clear' ? (
+                      <LoaderCircle className="me-2 size-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="me-2 size-4" />
+                    )}
+                    {isEnglish ? 'Clear data' : 'مسح البيانات'}
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        )}
       </div>
     </DashboardLayout>
   );

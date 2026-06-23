@@ -18,7 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/app/components/ui';
-import { submitWalletTopUp } from '@/app/storage';
+import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
+import { depositWallet } from '@/app/api/endpoints';
 
 export default function CompanyTopUpWallet() {
   const { language, isEnglish } = useLanguage();
@@ -29,8 +30,9 @@ export default function CompanyTopUpWallet() {
   );
   const [reference, setReference] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const parsedAmount = Number(amount);
@@ -43,8 +45,21 @@ export default function CompanyTopUpWallet() {
       return;
     }
 
-    submitWalletTopUp(parsedAmount, paymentMethod, 'company');
-    navigate('/company/wallet');
+    try {
+      setIsSubmitting(true);
+      setError('');
+      await depositWallet(parsedAmount);
+      navigate('/company/wallet');
+    } catch (requestError) {
+      const validationMessage = getValidationErrors(requestError).amount?.[0];
+      setError(
+        validationMessage ||
+          getApiErrorMessage(requestError) ||
+          (isEnglish ? 'Unable to top up the wallet.' : 'تعذر شحن المحفظة.'),
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleAmountChange = (value: string) => {
@@ -155,9 +170,15 @@ export default function CompanyTopUpWallet() {
               {error && <p className="text-sm text-destructive">{error}</p>}
 
               <div className="flex flex-wrap items-center gap-3">
-                <Button type="submit" className="gap-2">
+                <Button type="submit" className="gap-2" disabled={isSubmitting}>
                   <CreditCard className="size-4" />
-                  {isEnglish ? 'Confirm top up' : 'تأكيد الشحن'}
+                  {isSubmitting
+                    ? isEnglish
+                      ? 'Adding balance...'
+                      : 'جار إضافة الرصيد...'
+                    : isEnglish
+                      ? 'Confirm top up'
+                      : 'تأكيد الشحن'}
                 </Button>
                 <Button asChild type="button" variant="outline">
                   <Link to="/company/wallet">{isEnglish ? 'Cancel' : 'إلغاء'}</Link>
@@ -190,8 +211,8 @@ export default function CompanyTopUpWallet() {
             <CardContent className="pt-6">
               <div className="text-sm text-muted-foreground">
                 {isEnglish
-                  ? 'This screen is a frontend demo and uses company wallet data only.'
-                  : 'هذه الواجهة تجريبية من جهة الفرونت، وتستخدم بيانات محفظة الشركة فقط.'}
+                  ? 'The amount is added to the authenticated company wallet.'
+                  : 'يُضاف المبلغ إلى محفظة الشركة المسجلة في الباك.'}
               </div>
             </CardContent>
           </Card>

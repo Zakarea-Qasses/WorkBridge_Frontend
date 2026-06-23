@@ -43,6 +43,7 @@ export const userRoutes = [
   { path: '/messages', Component: Messages },
   { path: '/notifications', Component: Notifications },
   { path: '/applied-jobs', Component: AppliedJobs },
+  { path: '/profile', Component: Profile },
   { path: '/profile/:id', Component: Profile },
   { path: '/freelancers/:id', Component: PublicProfile },
   { path: '/settings', Component: Settings },

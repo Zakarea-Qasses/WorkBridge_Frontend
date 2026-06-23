@@ -1,5 +1,3 @@
-import { getMessagingData, updateReportedMessageStatus } from './messagesStorage';
-
 const CONTENT_REPORTS_STORAGE_KEY = 'workbridge-content-reports';
 
 export interface UnifiedReportItem {
@@ -163,22 +161,6 @@ function updateContentReportStatus(
 }
 
 export function getUnifiedReports() {
-  const chatReports: UnifiedReportItem[] = getMessagingData().reports.map((report) => ({
-    id: `chat-${report.id}`,
-    source: 'chat',
-    targetType: 'Conversation report',
-    targetLabel: `Conversation #${report.conversationId}`,
-    reporter: translateReportText(report.reporter),
-    status:
-      report.status === 'new'
-        ? 'New'
-        : report.status === 'reviewed'
-          ? 'Under Review'
-          : 'Closed',
-    description: translateReportText(report.reason),
-    createdAt: report.createdAt.slice(0, 10),
-  }));
-
   const contentReports: UnifiedReportItem[] = getContentReports().map((report) => ({
     id: `content-${report.id}`,
     source: 'content',
@@ -190,7 +172,7 @@ export function getUnifiedReports() {
     createdAt: report.createdAt,
   }));
 
-  return [...chatReports, ...contentReports].sort((first, second) =>
+  return contentReports.sort((first, second) =>
     second.createdAt.localeCompare(first.createdAt),
   );
 }
@@ -199,14 +181,6 @@ export function updateUnifiedReportStatus(
   reportId: string,
   status: 'جديد' | 'قيد المراجعة' | 'مغلق',
 ) {
-  if (reportId.startsWith('chat-')) {
-    const chatId = Number(reportId.replace('chat-', ''));
-    const chatStatus =
-      status === 'مغلق' ? 'resolved' : status === 'قيد المراجعة' ? 'reviewed' : 'new';
-    updateReportedMessageStatus(chatId, chatStatus);
-    return getUnifiedReports();
-  }
-
   if (reportId.startsWith('content-')) {
     const contentId = Number(reportId.replace('content-', ''));
     const normalizedStatus =

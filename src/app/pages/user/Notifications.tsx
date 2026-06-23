@@ -1,289 +1,333 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
-import { Bell, Briefcase, Building2, MessageSquare, ShieldAlert, Wallet } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Bell,
+  Briefcase,
+  Building2,
+  CheckCircle2,
+  LoaderCircle,
+  RefreshCw,
+  ShieldAlert,
+  Trash2,
+  Wallet,
+} from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
-import { useLanguage } from '@/app/providers/LanguageProvider';
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui';
+import { Badge, Button, Card, CardContent } from '@/app/components/ui';
 import { getApiErrorMessage } from '@/app/api/client';
-import { getNotifications } from '@/app/api/endpoints';
+import {
+  deleteNotification,
+  getNotifications,
+  getUnreadNotificationCount,
+  markAllNotificationsAsRead,
+  markNotificationAsRead,
+  type UserNotification,
+} from '@/app/api/endpoints';
+import { useAuth } from '@/app/providers/AuthProvider';
+import { useLanguage } from '@/app/providers/LanguageProvider';
 
-interface ApiNotification {
-  id: number;
-  title?: string;
-  message?: string;
-  type?: string;
-  read_at?: string | null;
-  created_at?: string;
+export const NOTIFICATION_COUNT_CHANGED_EVENT = 'workbridge:notification-count-changed';
+
+export function notifyUnreadCountChanged(count?: number) {
+  window.dispatchEvent(
+    new CustomEvent(NOTIFICATION_COUNT_CHANGED_EVENT, { detail: { count } }),
+  );
 }
 
-function getInitialNotifications(
-  userType: 'user' | 'company' | 'admin',
-  isEnglish: boolean,
-) {
-  if (userType === 'company') {
-    return [
-      {
-        id: 1,
-        title: isEnglish ? 'New applicant' : 'متقدم جديد',
-        description: isEnglish
-          ? 'A new applicant has arrived for one of the published jobs.'
-          : 'وصل متقدم جديد إلى إحدى الوظائف المنشورة.',
-        time: isEnglish ? '10 minutes ago' : 'منذ 10 دقائق',
-        type: 'applicants',
-        to: '/company/applicants',
-        unread: true,
-      },
-      {
-        id: 2,
-        title: isEnglish ? 'Message from candidate' : 'رسالة من مرشح',
-        description: isEnglish
-          ? 'There is a new message inside company conversations.'
-          : 'هناك رسالة جديدة داخل محادثات الشركة.',
-        time: isEnglish ? '1 hour ago' : 'منذ ساعة',
-        type: 'messages',
-        to: '/company/messages',
-        unread: true,
-      },
-      {
-        id: 3,
-        title: isEnglish ? 'Job post update' : 'تحديث على إعلان وظيفي',
-        description: isEnglish
-          ? 'One of the job posts has been updated or paused.'
-          : 'تم تحديث حالة أحد الإعلانات أو إيقافه.',
-        time: isEnglish ? '3 hours ago' : 'منذ 3 ساعات',
-        type: 'jobs',
-        to: '/company/jobs',
-        unread: false,
-      },
-    ];
-  }
-
-  if (userType === 'admin') {
-    return [
-      {
-        id: 1,
-        title: isEnglish ? 'New dispute' : 'نزاع جديد',
-        description: isEnglish
-          ? 'A new dispute was opened and needs an admin decision.'
-          : 'تم فتح نزاع جديد ويحتاج قرارًا من فريق الإدارة.',
-        time: isEnglish ? '20 minutes ago' : 'منذ 20 دقيقة',
-        type: 'disputes',
-        to: '/admin/disputes',
-        unread: true,
-      },
-      {
-        id: 2,
-        title: isEnglish ? 'Company verification request' : 'طلب توثيق شركة',
-        description: isEnglish
-          ? 'There is a new request in the company verification queue.'
-          : 'يوجد طلب جديد في قائمة توثيق الشركات.',
-        time: isEnglish ? '1 hour ago' : 'منذ ساعة',
-        type: 'verification',
-        to: '/admin/verification',
-        unread: true,
-      },
-      {
-        id: 3,
-        title: isEnglish ? 'Financial alert' : 'تنبيه مالي',
-        description: isEnglish
-          ? 'There is a new payment or withdrawal that needs review.'
-          : 'هناك دفعة أو سحب جديد يحتاج مراجعة.',
-        time: isEnglish ? '4 hours ago' : 'منذ 4 ساعات',
-        type: 'finance',
-        to: '/admin/finance',
-        unread: false,
-      },
-    ];
-  }
-
-  return [
-    {
-      id: 1,
-      title: isEnglish ? 'New message' : 'رسالة جديدة',
-      description: isEnglish
-        ? 'You have a new message in conversations from one of the clients.'
-        : 'لديك رسالة جديدة في المحادثات من أحد العملاء.',
-      time: isEnglish ? '10 minutes ago' : 'منذ 10 دقائق',
-      type: 'messages',
-      to: '/messages',
-      unread: true,
-    },
-    {
-      id: 2,
-      title: isEnglish ? 'New project for you' : 'مشروع جديد مناسب لك',
-      description: isEnglish
-        ? 'A new project was added in a section you follow.'
-        : 'تمت إضافة مشروع جديد ضمن القسم الذي تتابعه.',
-      time: isEnglish ? '1 hour ago' : 'منذ ساعة',
-      type: 'projects',
-      to: '/projects',
-      unread: true,
-    },
-    {
-      id: 3,
-      title: isEnglish ? 'Wallet update' : 'تحديث في المحفظة',
-      description: isEnglish
-        ? 'One of your wallet transactions has been reviewed.'
-        : 'تمت مراجعة إحدى المعاملات المالية في محفظتك.',
-      time: isEnglish ? '3 hours ago' : 'منذ 3 ساعات',
-      type: 'wallet',
-      to: '/wallet',
-      unread: false,
-    },
-  ];
+function notificationTypeLabel(type: string | null, isEnglish: boolean) {
+  const labels: Record<string, [string, string]> = {
+    new_account_review: ['Account review', 'مراجعة حساب'],
+    company_verified: ['Company verification', 'توثيق شركة'],
+    company_unverified: ['Company verification', 'توثيق شركة'],
+    account_approved: ['Account approval', 'قبول الحساب'],
+    account_blocked: ['Account status', 'حالة الحساب'],
+    project_application: ['Project application', 'تقديم على مشروع'],
+    application_accepted: ['Application accepted', 'قبول تقديم'],
+    application_rejected: ['Application rejected', 'رفض تقديم'],
+    service_request: ['Service request', 'طلب خدمة'],
+    service_request_accepted: ['Service request accepted', 'قبول طلب خدمة'],
+    service_request_rejected: ['Service request rejected', 'رفض طلب خدمة'],
+    new_report: ['New report', 'بلاغ جديد'],
+    report_decision: ['Report decision', 'قرار بلاغ'],
+  };
+  return type && labels[type] ? labels[type][isEnglish ? 0 : 1] : isEnglish ? 'Notification' : 'إشعار';
 }
 
-export function NotificationsPage({ userType = 'user' }: { userType?: 'user' | 'company' | 'admin' }) {
+function notificationIcon(type: string | null) {
+  if (type?.includes('company')) return <Building2 className="size-5 text-amber-600" />;
+  if (type?.includes('application') || type?.includes('service')) {
+    return <Briefcase className="size-5 text-primary" />;
+  }
+  if (type?.includes('account') || type?.includes('report')) {
+    return <ShieldAlert className="size-5 text-rose-600" />;
+  }
+  if (type?.includes('payment') || type?.includes('wallet')) {
+    return <Wallet className="size-5 text-green-600" />;
+  }
+  return <Bell className="size-5 text-primary" />;
+}
+
+function formatDate(value: string, isEnglish: boolean) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return isEnglish ? 'Date unavailable' : 'التاريخ غير متاح';
+  return new Intl.DateTimeFormat(isEnglish ? 'en' : 'ar', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
+export function NotificationsPage({
+  userType = 'user',
+}: {
+  userType?: 'user' | 'company' | 'admin';
+}) {
+  const { user } = useAuth();
   const { isEnglish, language } = useLanguage();
-  const [notifications, setNotifications] = useState(() => getInitialNotifications(userType, isEnglish));
-  const [statusMessage, setStatusMessage] = useState('');
+  const [notifications, setNotifications] = useState<UserNotification[]>([]);
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [markingAll, setMarkingAll] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const load = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    setError('');
+    try {
+      const [notificationPage, count] = await Promise.all([
+        getNotifications(page),
+        getUnreadNotificationCount(),
+      ]);
+      setNotifications(notificationPage.data);
+      setLastPage(notificationPage.last_page);
+      setUnreadCount(count);
+      notifyUnreadCountChanged(count);
+    } catch (requestError) {
+      setNotifications([]);
+      setError(getApiErrorMessage(requestError));
+    } finally {
+      setLoading(false);
+    }
+  }, [page, user]);
 
   useEffect(() => {
-    let mounted = true;
+    setNotifications([]);
+    setUnreadCount(0);
+    setPage(1);
+  }, [user?.id]);
 
-    getNotifications<ApiNotification>()
-      .then((apiNotifications) => {
-        if (!mounted || apiNotifications.length === 0) {
-          return;
-        }
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-        setNotifications(
-          apiNotifications.map((notification) => ({
-            id: notification.id,
-            title: notification.title || (isEnglish ? 'Notification' : 'إشعار'),
-            description: notification.message || '',
-            time: notification.created_at || '',
-            type: notification.type || 'notifications',
-            to:
-              userType === 'admin'
-                ? '/admin'
-                : userType === 'company'
-                  ? '/company-dashboard'
-                  : '/dashboard',
-            unread: !notification.read_at,
-          })),
-        );
-      })
-      .catch((error) => setStatusMessage(getApiErrorMessage(error)))
-      .finally(() => {
-        if (mounted) {
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [isEnglish, userType]);
-
-  const unreadCount = useMemo(
-    () => notifications.filter((notification) => notification.unread).length,
-    [notifications],
-  );
-
-  const handleMarkAllAsRead = () => {
-    if (unreadCount === 0) {
-      setStatusMessage(isEnglish ? 'All notifications are already read.' : 'كل الإشعارات مقروءة بالفعل.');
-      return;
-    }
-
-    setNotifications((current) =>
-      current.map((notification) => ({
-        ...notification,
-        unread: false,
-      })),
-    );
-    setStatusMessage(isEnglish ? 'All notifications were marked as read.' : 'تم تحديد جميع الإشعارات كمقروءة.');
+  const refreshCount = async () => {
+    const count = await getUnreadNotificationCount();
+    setUnreadCount(count);
+    notifyUnreadCountChanged(count);
   };
 
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'messages':
-        return <MessageSquare className="size-5 text-blue-600" />;
-      case 'projects':
-      case 'jobs':
-        return <Briefcase className="size-5 text-primary" />;
-      case 'wallet':
-      case 'finance':
-        return <Wallet className="size-5 text-green-600" />;
-      case 'verification':
-        return <Building2 className="size-5 text-amber-600" />;
-      case 'disputes':
-        return <ShieldAlert className="size-5 text-rose-600" />;
-      default:
-        return <Bell className="size-5 text-primary" />;
+  const markOne = async (notification: UserNotification) => {
+    if (notification.read_at || busyId === notification.id) return;
+    try {
+      setBusyId(notification.id);
+      setError('');
+      setSuccess('');
+      const updated = await markNotificationAsRead(notification.id);
+      setNotifications((current) =>
+        current.map((item) => (item.id === notification.id ? updated : item)),
+      );
+      await refreshCount();
+      setSuccess(isEnglish ? 'Notification marked as read.' : 'تم تحديد الإشعار كمقروء');
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const markAll = async () => {
+    if (!unreadCount || markingAll) return;
+    try {
+      setMarkingAll(true);
+      setError('');
+      setSuccess('');
+      await markAllNotificationsAsRead();
+      const readAt = new Date().toISOString();
+      setNotifications((current) =>
+        current.map((notification) => ({
+          ...notification,
+          read_at: notification.read_at || readAt,
+        })),
+      );
+      setUnreadCount(0);
+      notifyUnreadCountChanged(0);
+      setSuccess(
+        isEnglish
+          ? 'All notifications marked as read.'
+          : 'تم تحديد جميع الإشعارات كمقروءة',
+      );
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError));
+    } finally {
+      setMarkingAll(false);
+    }
+  };
+
+  const remove = async (notification: UserNotification) => {
+    if (
+      !window.confirm(
+        isEnglish
+          ? 'Are you sure you want to delete this notification?'
+          : 'هل أنت متأكد من حذف هذا الإشعار؟',
+      )
+    ) return;
+
+    try {
+      setBusyId(notification.id);
+      setError('');
+      setSuccess('');
+      await deleteNotification(notification.id);
+      const remaining = notifications.filter((item) => item.id !== notification.id);
+      setNotifications(remaining);
+      await refreshCount();
+      setSuccess(isEnglish ? 'Notification deleted.' : 'تم حذف الإشعار');
+      if (!remaining.length && page > 1) setPage((current) => current - 1);
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError));
+    } finally {
+      setBusyId(null);
     }
   };
 
   return (
     <DashboardLayout userType={userType}>
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">{isEnglish ? 'Notifications' : 'الإشعارات'}</h1>
             <p className="mt-1 text-muted-foreground">
-              {isEnglish
-                ? 'All alerts and updates related to this account'
-                : 'كل التنبيهات والتحديثات الخاصة بهذا الحساب'}
+              {isEnglish ? `Unread: ${unreadCount}` : `غير المقروءة: ${unreadCount}`}
             </p>
           </div>
-          <Button variant="outline" onClick={handleMarkAllAsRead}>
-            {isEnglish ? 'Mark all as read' : 'تحديد الكل كمقروء'}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" disabled={loading} onClick={() => void load()}>
+              <RefreshCw className="me-2 size-4" />
+              {isEnglish ? 'Refresh' : 'تحديث'}
+            </Button>
+            <Button disabled={!unreadCount || markingAll} onClick={() => void markAll()}>
+              {markingAll ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
+              {isEnglish ? 'Mark all as read' : 'تحديد الكل كمقروء'}
+            </Button>
+          </div>
         </div>
 
-        {loading ? (
-          <Card>
-            <CardContent className="pt-6 text-sm text-muted-foreground">
-              {isEnglish ? 'Loading notifications...' : 'جار تحميل الإشعارات...'}
-            </CardContent>
+        {error ? (
+          <Card className="border-destructive/30">
+            <CardContent className="py-3 text-sm text-destructive">{error}</CardContent>
           </Card>
         ) : null}
+        {success ? (
+          <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+            <CheckCircle2 className="size-4" />
+            {success}
+          </div>
+        ) : null}
 
-        {statusMessage && (
-          <Card className="border-green-200 bg-green-50 p-3 text-sm text-green-700">
-            {statusMessage}
+        {loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((item) => (
+              <div key={item} className="h-32 animate-pulse rounded-md bg-muted" />
+            ))}
+          </div>
+        ) : notifications.length === 0 && !error ? (
+          <Card>
+            <CardContent className="flex min-h-56 flex-col items-center justify-center gap-3 text-center text-muted-foreground">
+              <Bell className="size-10" />
+              <p>{isEnglish ? 'No notifications currently.' : 'لا توجد إشعارات حالياً'}</p>
+            </CardContent>
           </Card>
+        ) : (
+          <div className="space-y-3">
+            {notifications.map((notification) => {
+              const busy = busyId === notification.id;
+              return (
+                <Card
+                  key={notification.id}
+                  className={!notification.read_at ? 'border-primary/30 bg-primary/5' : ''}
+                >
+                  <CardContent className="flex flex-wrap items-start justify-between gap-4 pt-6">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <div className="mt-1">{notificationIcon(notification.type)}</div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="font-semibold">{notification.title}</h2>
+                          <Badge variant="outline">
+                            {notificationTypeLabel(notification.type, isEnglish)}
+                          </Badge>
+                          {!notification.read_at ? (
+                            <Badge>{isEnglish ? 'New' : 'جديد'}</Badge>
+                          ) : null}
+                        </div>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+                          {notification.message}
+                        </p>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {formatDate(notification.created_at, isEnglish)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      {!notification.read_at ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => void markOne(notification)}
+                        >
+                          {busy ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
+                          {isEnglish ? 'Mark read' : 'تحديد كمقروء'}
+                        </Button>
+                      ) : null}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        disabled={busy}
+                        onClick={() => void remove(notification)}
+                        title={isEnglish ? 'Delete' : 'حذف'}
+                      >
+                        <Trash2 className="size-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         )}
 
-        <div className="text-sm text-muted-foreground">
-          {isEnglish ? 'Unread notifications:' : 'عدد الإشعارات غير المقروءة:'} {unreadCount}
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{isEnglish ? 'Latest notifications' : 'آخر الإشعارات'}</CardTitle>
-            <CardDescription>
-              {isEnglish
-                ? 'Click any notification to open its related page.'
-                : 'اضغط على أي إشعار للانتقال إلى الصفحة المرتبطة به'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {notifications.map((notification) => (
-              <Link key={notification.id} to={notification.to} className="block">
-                <div className="flex items-start justify-between gap-4 rounded-xl border border-border p-4 transition-colors hover:bg-accent/40">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-1">{getIcon(notification.type)}</div>
-                    <div>
-                      <div className="mb-1 flex items-center gap-2">
-                        <h3 className="font-semibold">{notification.title}</h3>
-                        {notification.unread && (
-                          <Badge className="bg-blue-600">{isEnglish ? 'New' : 'جديد'}</Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">{notification.description}</p>
-                    </div>
-                  </div>
-                  <span className="whitespace-nowrap text-xs text-muted-foreground">
-                    {notification.time}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </CardContent>
-        </Card>
+        {lastPage > 1 ? (
+          <div className="flex justify-center gap-2">
+            <Button
+              variant="outline"
+              disabled={page === 1 || loading}
+              onClick={() => setPage((current) => current - 1)}
+            >
+              {isEnglish ? 'Previous' : 'السابق'}
+            </Button>
+            <span className="flex items-center px-3 text-sm text-muted-foreground">
+              {page} / {lastPage}
+            </span>
+            <Button
+              variant="outline"
+              disabled={page === lastPage || loading}
+              onClick={() => setPage((current) => current + 1)}
+            >
+              {isEnglish ? 'Next' : 'التالي'}
+            </Button>
+          </div>
+        ) : null}
       </div>
     </DashboardLayout>
   );

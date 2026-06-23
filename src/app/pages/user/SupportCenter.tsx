@@ -1,4 +1,5 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, CheckCircle2, LoaderCircle, RefreshCw } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import {
@@ -11,143 +12,242 @@ import {
   CardTitle,
   Input,
   Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Textarea,
 } from '@/app/components/ui';
+import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import {
-  createSupportTicket,
-  getSupportTickets,
-  SupportAttachment,
-  SupportTicket,
-} from '@/app/storage';
+  createReport,
+  getMyReports,
+  Report,
+  ReportCategory,
+  ReportPriority,
+} from '@/app/api/endpoints';
+import { useAuth } from '@/app/providers/AuthProvider';
 
-function getCategoryClasses(category: SupportTicket['category']) {
-  if (category === 'Dispute') {
-    return 'bg-red-100 text-red-700 border-red-200';
-  }
+interface SupportForm {
+  title: string;
+  description: string;
+  category: ReportCategory;
+  priority: ReportPriority;
+  attachmentsText: string;
+}
 
-  if (category === 'Complaint') {
-    return 'bg-amber-100 text-amber-700 border-amber-200';
-  }
+type Status = {
+  type: 'success' | 'error';
+  message: string;
+} | null;
 
+const initialForm: SupportForm = {
+  title: '',
+  description: '',
+  category: 'support',
+  priority: 'normal',
+  attachmentsText: '',
+};
+
+function categoryLabel(category: string, isEnglish: boolean) {
+  const labels: Record<string, { ar: string; en: string }> = {
+    support: { ar: 'دعم عام', en: 'Support' },
+    complaint: { ar: 'شكوى', en: 'Complaint' },
+    dispute: { ar: 'نزاع', en: 'Dispute' },
+    payment: { ar: 'مشكلة دفع', en: 'Payment' },
+    technical: { ar: 'مشكلة تقنية', en: 'Technical' },
+  };
+
+  return isEnglish ? labels[category]?.en || category : labels[category]?.ar || category;
+}
+
+function categoryClasses(category: string) {
+  if (category === 'dispute') return 'bg-red-100 text-red-700 border-red-200';
+  if (category === 'complaint') return 'bg-amber-100 text-amber-700 border-amber-200';
+  if (category === 'payment') return 'bg-green-100 text-green-700 border-green-200';
+  if (category === 'technical') return 'bg-purple-100 text-purple-700 border-purple-200';
   return 'bg-blue-100 text-blue-700 border-blue-200';
 }
 
-function getCategoryLabel(category: SupportTicket['category'], isEnglish: boolean) {
-  if (isEnglish) {
-    return category;
-  }
+function priorityLabel(priority: string, isEnglish: boolean) {
+  const labels: Record<string, { ar: string; en: string }> = {
+    low: { ar: 'منخفضة', en: 'Low' },
+    normal: { ar: 'عادية', en: 'Normal' },
+    high: { ar: 'مرتفعة', en: 'High' },
+  };
 
-  switch (category) {
-    case 'Support':
-      return 'دعم';
-    case 'Complaint':
-      return 'شكوى';
-    case 'Dispute':
-      return 'نزاع';
-    default:
-      return category;
-  }
+  return isEnglish ? labels[priority]?.en || priority : labels[priority]?.ar || priority;
 }
 
-function getStatusClasses(status: SupportTicket['status']) {
-  if (status === 'Closed') {
-    return 'bg-green-100 text-green-700 border-green-200';
-  }
+function statusLabel(status: string, isEnglish: boolean) {
+  const labels: Record<string, { ar: string; en: string }> = {
+    pending: { ar: 'جديد', en: 'Pending' },
+    accepted: { ar: 'تم القبول', en: 'Accepted' },
+    rejected: { ar: 'مرفوض', en: 'Rejected' },
+  };
 
-  if (status === 'Under Review') {
-    return 'bg-amber-100 text-amber-700 border-amber-200';
-  }
+  return isEnglish ? labels[status]?.en || status : labels[status]?.ar || status;
+}
 
+function statusClasses(status: string) {
+  if (status === 'accepted') return 'bg-green-100 text-green-700 border-green-200';
+  if (status === 'rejected') return 'bg-red-100 text-red-700 border-red-200';
   return 'bg-slate-100 text-slate-700 border-slate-200';
 }
 
-function getStatusLabel(status: SupportTicket['status'], isEnglish: boolean) {
-  if (isEnglish) {
-    return status;
+function statusText(report: Report, isEnglish: boolean) {
+  if (report.admin_decision) {
+    return report.admin_decision;
   }
 
-  switch (status) {
-    case 'New':
-      return 'جديد';
-    case 'Under Review':
-      return 'قيد المراجعة';
-    case 'Closed':
-      return 'مغلق';
-    default:
-      return status;
+  if (report.status === 'accepted') {
+    return isEnglish ? 'Your request was accepted by the admin team.' : 'تم قبول طلبك من قبل الإدارة.';
   }
+
+  if (report.status === 'rejected') {
+    return isEnglish ? 'Your request was rejected by the admin team.' : 'تم رفض طلبك من قبل الإدارة.';
+  }
+
+  return isEnglish
+    ? 'The request is waiting for admin review.'
+    : 'الطلب بانتظار مراجعة الإدارة.';
 }
 
-function getStatusText(status: SupportTicket['status'], isEnglish: boolean) {
-  if (status === 'Under Review') {
-    return isEnglish ? 'The support team is reviewing your request now.' : 'فريق الدعم يراجع طلبك الآن.';
-  }
+function formatDate(value: string, isEnglish: boolean) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return isEnglish ? 'Date unavailable' : 'التاريخ غير متاح';
 
-  if (status === 'Closed') {
-    return isEnglish ? 'The request was handled and the ticket was closed.' : 'تمت معالجة الطلب وإغلاق التذكرة.';
-  }
+  return new Intl.DateTimeFormat(isEnglish ? 'en' : 'ar', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
 
-  return isEnglish ? 'The request was received and is waiting for review to start.' : 'تم استلام الطلب وهو بانتظار بدء المراجعة.';
+function StatusMessage({ status }: { status: Status }) {
+  if (!status) return null;
+
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-md border px-4 py-3 text-sm ${
+        status.type === 'success'
+          ? 'border-green-200 bg-green-50 text-green-700'
+          : 'border-destructive/30 bg-destructive/5 text-destructive'
+      }`}
+    >
+      {status.type === 'success' ? (
+        <CheckCircle2 className="size-4 shrink-0" />
+      ) : (
+        <AlertCircle className="size-4 shrink-0" />
+      )}
+      {status.message}
+    </div>
+  );
 }
 
 export default function SupportCenter() {
   const { isEnglish, language } = useLanguage();
-  const [tickets, setTickets] = useState(getSupportTickets());
-  const [form, setForm] = useState({
-    subject: '',
-    description: '',
-  });
-  const [attachments, setAttachments] = useState<SupportAttachment[]>([]);
-  const [feedback, setFeedback] = useState('');
+  const { user } = useAuth();
+  const requestIdRef = useRef(0);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState<Status>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const [form, setForm] = useState<SupportForm>(initialForm);
+
+  const latestReport = useMemo(() => reports[0], [reports]);
+
+  const loadReports = useCallback(async () => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    setLoading(true);
+    setStatus(null);
+    setReports([]);
+
+    try {
+      const response = await getMyReports(page);
+      if (requestId !== requestIdRef.current) return;
+      setReports(response.data);
+      setLastPage(response.last_page || 1);
+    } catch (error) {
+      if (requestId !== requestIdRef.current) return;
+      setReports([]);
+      setStatus({
+        type: 'error',
+        message:
+          getApiErrorMessage(error) ||
+          (isEnglish ? 'Could not load support requests.' : 'تعذر تحميل طلبات الدعم'),
+      });
+    } finally {
+      if (requestId === requestIdRef.current) setLoading(false);
+    }
+  }, [isEnglish, page]);
 
   useEffect(() => {
-    const syncTickets = () => setTickets(getSupportTickets());
+    setReports([]);
+    setPage(1);
+    setLastPage(1);
+    setFieldErrors({});
+    setForm(initialForm);
+  }, [user?.id]);
 
-    syncTickets();
-    window.addEventListener('focus', syncTickets);
-    document.addEventListener('visibilitychange', syncTickets);
+  useEffect(() => {
+    void loadReports();
+  }, [loadReports]);
 
-    return () => {
-      window.removeEventListener('focus', syncTickets);
-      document.removeEventListener('visibilitychange', syncTickets);
-    };
-  }, []);
-
-  const latestTicket = useMemo(() => tickets[0], [tickets]);
-
-  const handleFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-    const mappedFiles: SupportAttachment[] = files.map((file) => ({
-      name: file.name,
-      type: file.type || 'unknown',
-      size: file.size,
-    }));
-    setAttachments(mappedFiles);
+  const updateForm = <K extends keyof SupportForm>(key: K, value: SupportForm[K]) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    setFieldErrors((current) => ({ ...current, [key]: [] }));
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const parseAttachments = () => {
+    const values = form.attachmentsText
+      .split('\n')
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    return values.length ? values : null;
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submitting) return;
 
-    if (!form.subject || !form.description) {
-      setFeedback(isEnglish ? 'Enter the subject and description before sending.' : 'أدخل عنوان الرسالة ووصفها قبل الإرسال.');
-      return;
+    try {
+      setSubmitting(true);
+      setStatus(null);
+      setFieldErrors({});
+      await createReport({
+        target_type: 'general',
+        title: form.title.trim() || null,
+        category: form.category,
+        priority: form.priority,
+        description: form.description.trim(),
+        attachments: parseAttachments(),
+      });
+      setForm(initialForm);
+      setStatus({
+        type: 'success',
+        message: isEnglish
+          ? 'Support request sent successfully.'
+          : 'تم إرسال طلب الدعم بنجاح',
+      });
+      setPage(1);
+      await loadReports();
+    } catch (error) {
+      setFieldErrors(getValidationErrors(error));
+      setStatus({
+        type: 'error',
+        message:
+          getApiErrorMessage(error) ||
+          (isEnglish ? 'Could not send support request.' : 'تعذر إرسال طلب الدعم'),
+      });
+    } finally {
+      setSubmitting(false);
     }
-
-    setTickets(
-      createSupportTicket({
-        ...form,
-        category: 'Support',
-        attachments,
-      }),
-    );
-    setForm({ subject: '', description: '' });
-    setAttachments([]);
-
-    setFeedback(
-      isEnglish
-        ? 'The support request was sent with attachments to the support center.'
-        : 'تم إرسال طلب الدعم مع المرفقات إلى مركز الدعم.',
-    );
   };
 
   return (
@@ -157,31 +257,31 @@ export default function SupportCenter() {
           <h1 className="text-3xl font-bold">{isEnglish ? 'Support Center' : 'مركز الدعم'}</h1>
           <p className="mt-1 text-muted-foreground">
             {isEnglish
-              ? 'Send your ticket with images or files, and track the review status from the same page.'
-              : 'أرسل تذكرتك مع الصور أو الملفات، وتابع حالة المراجعة من نفس الصفحة.'}
+              ? 'Send a real support request and track the admin review status from this page.'
+              : 'أرسل طلب دعم حقيقي وتابع حالة مراجعته من الإدارة من نفس الصفحة.'}
           </p>
         </div>
 
-        {feedback && (
-          <Card className="border-primary/20 bg-primary/5">
-            <CardContent className="pt-6 text-sm text-primary">{feedback}</CardContent>
-          </Card>
-        )}
+        <StatusMessage status={status} />
 
-        {latestTicket ? (
+        {latestReport ? (
           <Card className="border-amber-200 bg-amber-50/60">
             <CardHeader>
               <CardTitle>{isEnglish ? 'Latest Update on Your Request' : 'آخر تحديث على طلبك'}</CardTitle>
-              <CardDescription>{latestTicket.subject}</CardDescription>
+              <CardDescription>{latestReport.title || `#${latestReport.id}`}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap items-center justify-between gap-3">
               <div className="space-y-1">
-                <Badge className={getStatusClasses(latestTicket.status)}>
-                  {getStatusLabel(latestTicket.status, isEnglish)}
+                <Badge className={statusClasses(latestReport.status)}>
+                  {statusLabel(latestReport.status, isEnglish)}
                 </Badge>
-                <p className="text-sm text-muted-foreground">{getStatusText(latestTicket.status, isEnglish)}</p>
+                <p className="text-sm text-muted-foreground">
+                  {statusText(latestReport, isEnglish)}
+                </p>
               </div>
-              <span className="text-xs text-muted-foreground">{latestTicket.createdAt}</span>
+              <span className="text-xs text-muted-foreground">
+                {formatDate(latestReport.updated_at || latestReport.created_at, isEnglish)}
+              </span>
             </CardContent>
           </Card>
         ) : null}
@@ -192,19 +292,70 @@ export default function SupportCenter() {
               <CardTitle>{isEnglish ? 'Create New Ticket' : 'إنشاء تذكرة جديدة'}</CardTitle>
               <CardDescription>
                 {isEnglish
-                  ? 'You can attach images or files with the request so the support team can review them.'
-                  : 'يمكنك إرفاق صور أو ملفات مع الطلب حتى يطلع عليها فريق الدعم.'}
+                  ? 'The request is submitted to the backend reports system.'
+                  : 'يتم إرسال الطلب إلى نظام البلاغات الحقيقي في الباك.'}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div className="space-y-2">
-                  <Label htmlFor="support-subject">{isEnglish ? 'Subject' : 'العنوان'}</Label>
+                  <Label htmlFor="support-title">{isEnglish ? 'Title' : 'العنوان'}</Label>
                   <Input
-                    id="support-subject"
-                    value={form.subject}
-                    onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))}
+                    id="support-title"
+                    value={form.title}
+                    onChange={(event) => updateForm('title', event.target.value)}
                   />
+                  {fieldErrors.title?.[0] ? (
+                    <p className="text-xs text-destructive">{fieldErrors.title[0]}</p>
+                  ) : null}
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>{isEnglish ? 'Category' : 'التصنيف'}</Label>
+                    <Select
+                      value={form.category}
+                      onValueChange={(value) => updateForm('category', value as ReportCategory)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(['support', 'complaint', 'dispute', 'payment', 'technical'] as const).map(
+                          (category) => (
+                            <SelectItem key={category} value={category}>
+                              {categoryLabel(category, isEnglish)}
+                            </SelectItem>
+                          ),
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {fieldErrors.category?.[0] ? (
+                      <p className="text-xs text-destructive">{fieldErrors.category[0]}</p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>{isEnglish ? 'Priority' : 'الأولوية'}</Label>
+                    <Select
+                      value={form.priority}
+                      onValueChange={(value) => updateForm('priority', value as ReportPriority)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(['low', 'normal', 'high'] as const).map((priority) => (
+                          <SelectItem key={priority} value={priority}>
+                            {priorityLabel(priority, isEnglish)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {fieldErrors.priority?.[0] ? (
+                      <p className="text-xs text-destructive">{fieldErrors.priority[0]}</p>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -213,87 +364,144 @@ export default function SupportCenter() {
                     id="support-description"
                     rows={6}
                     value={form.description}
-                    onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                    onChange={(event) => updateForm('description', event.target.value)}
                   />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="support-attachments">{isEnglish ? 'Upload Images or Files' : 'رفع صور أو ملفات'}</Label>
-                  <Input
-                    id="support-attachments"
-                    type="file"
-                    multiple
-                    onChange={handleFilesChange}
-                    accept="image/*,.pdf,.doc,.docx,.txt,.zip,.rar"
-                  />
-                  {attachments.length > 0 ? (
-                    <div className="rounded-2xl border border-border p-3 text-sm">
-                      <p className="mb-2 font-medium">{isEnglish ? 'Attached Files' : 'الملفات المرفقة'}</p>
-                      <div className="space-y-1 text-muted-foreground">
-                        {attachments.map((file) => (
-                          <p key={`${file.name}-${file.size}`}>
-                            {file.name} - {(file.size / 1024).toFixed(1)} KB
-                          </p>
-                        ))}
-                      </div>
-                    </div>
+                  {fieldErrors.description?.[0] ? (
+                    <p className="text-xs text-destructive">{fieldErrors.description[0]}</p>
                   ) : null}
                 </div>
 
-                <Button type="submit">{isEnglish ? 'Send Ticket' : 'إرسال التذكرة'}</Button>
+                <div className="space-y-2">
+                  <Label htmlFor="support-attachments">
+                    {isEnglish ? 'Attachment references' : 'مراجع المرفقات'}
+                  </Label>
+                  <Textarea
+                    id="support-attachments"
+                    rows={3}
+                    placeholder={
+                      isEnglish
+                        ? 'Optional: write one file name or URL per line. File upload is not supported by the backend yet.'
+                        : 'اختياري: اكتب اسم ملف أو رابط في كل سطر. رفع الملفات غير مدعوم من الباك حالياً.'
+                    }
+                    value={form.attachmentsText}
+                    onChange={(event) => updateForm('attachmentsText', event.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {isEnglish
+                      ? 'Real file upload is not supported currently.'
+                      : 'إرفاق الملفات كرفع مباشر غير مدعوم حالياً.'}
+                  </p>
+                  {fieldErrors.attachments?.[0] ? (
+                    <p className="text-xs text-destructive">{fieldErrors.attachments[0]}</p>
+                  ) : null}
+                </div>
+
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
+                  {isEnglish ? 'Send Ticket' : 'إرسال التذكرة'}
+                </Button>
               </form>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>{isEnglish ? 'Your Tickets History' : 'سجل تذاكرك'}</CardTitle>
-              <CardDescription>
-                {isEnglish
-                  ? 'Here you can see the status of every request and know whether it is under admin review.'
-                  : 'هنا ترى حالة كل طلب، ومن هنا تعرف إذا كان الطلب قيد المراجعة عند الأدمن.'}
-              </CardDescription>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle>{isEnglish ? 'Your Tickets History' : 'سجل تذاكرك'}</CardTitle>
+                  <CardDescription>
+                    {isEnglish
+                      ? 'These requests come from GET /reports/my.'
+                      : 'هذه الطلبات محملة من GET /reports/my.'}
+                  </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" disabled={loading} onClick={() => void loadReports()}>
+                  <RefreshCw className="me-2 size-4" />
+                  {isEnglish ? 'Retry' : 'إعادة المحاولة'}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {tickets.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                  {isEnglish ? 'There are no tickets yet.' : 'لا توجد تذاكر بعد.'}
+              {loading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((item) => (
+                    <div key={item} className="h-32 animate-pulse rounded-md bg-muted" />
+                  ))}
+                </div>
+              ) : reports.length === 0 && !status ? (
+                <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                  {isEnglish ? 'No support requests yet.' : 'لا توجد طلبات دعم حتى الآن'}
                 </div>
               ) : null}
 
-              {tickets.map((ticket) => (
-                <div key={ticket.id} className="space-y-3 rounded-2xl border border-border p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h3 className="font-semibold">{ticket.subject}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">{ticket.description}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge className={getCategoryClasses(ticket.category)}>
-                        {getCategoryLabel(ticket.category, isEnglish)}
-                      </Badge>
-                      <Badge className={getStatusClasses(ticket.status)}>
-                        {getStatusLabel(ticket.status, isEnglish)}
-                      </Badge>
-                    </div>
-                  </div>
+              {!loading
+                ? reports.map((report) => (
+                    <div key={report.id} className="space-y-3 rounded-md border border-border p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="font-semibold">{report.title || `#${report.id}`}</h3>
+                          <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                            {report.description}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge className={categoryClasses(report.category)}>
+                            {categoryLabel(report.category, isEnglish)}
+                          </Badge>
+                          <Badge variant="outline">
+                            {priorityLabel(report.priority, isEnglish)}
+                          </Badge>
+                          <Badge className={statusClasses(report.status)}>
+                            {statusLabel(report.status, isEnglish)}
+                          </Badge>
+                        </div>
+                      </div>
 
-                  <p className="text-sm text-muted-foreground">{getStatusText(ticket.status, isEnglish)}</p>
+                      <p className="text-sm text-muted-foreground">{statusText(report, isEnglish)}</p>
 
-                  {ticket.attachments.length > 0 ? (
-                    <div className="rounded-xl bg-muted/40 p-3 text-sm">
-                      <p className="mb-2 font-medium">{isEnglish ? 'Attachments' : 'المرفقات'}</p>
-                      <div className="space-y-1 text-muted-foreground">
-                        {ticket.attachments.map((file) => (
-                          <p key={`${ticket.id}-${file.name}-${file.size}`}>{file.name}</p>
-                        ))}
+                      {report.attachments?.length ? (
+                        <div className="rounded-md bg-muted/40 p-3 text-sm">
+                          <p className="mb-2 font-medium">{isEnglish ? 'Attachments' : 'المرفقات'}</p>
+                          <div className="space-y-1 text-muted-foreground">
+                            {report.attachments.map((attachment) => (
+                              <p key={`${report.id}-${attachment}`}>{attachment}</p>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          {isEnglish ? 'No attachments.' : 'لا توجد مرفقات'}
+                        </p>
+                      )}
+
+                      <div className="text-xs text-muted-foreground">
+                        #{report.id} - {formatDate(report.created_at, isEnglish)}
                       </div>
                     </div>
-                  ) : null}
+                  ))
+                : null}
 
-                  <div className="text-xs text-muted-foreground">{ticket.createdAt}</div>
+              {lastPage > 1 ? (
+                <div className="flex justify-center gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    disabled={page === 1 || loading}
+                    onClick={() => setPage((current) => current - 1)}
+                  >
+                    {isEnglish ? 'Previous' : 'السابق'}
+                  </Button>
+                  <span className="flex items-center px-3 text-sm text-muted-foreground">
+                    {page} / {lastPage}
+                  </span>
+                  <Button
+                    variant="outline"
+                    disabled={page === lastPage || loading}
+                    onClick={() => setPage((current) => current + 1)}
+                  >
+                    {isEnglish ? 'Next' : 'التالي'}
+                  </Button>
                 </div>
-              ))}
+              ) : null}
             </CardContent>
           </Card>
         </div>

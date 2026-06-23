@@ -36,17 +36,47 @@ export interface LocationOption {
 export interface PersonalProfile {
   id: number;
   user_id: number;
+  name?: string | null;
+  governorate_id?: number | null;
+  city_id?: number | null;
   job_title: string | null;
   phone: string | null;
   address: string | null;
   description: string | null;
   bio: string | null;
+  rating_avg?: number | string | null;
   created_at?: string;
   updated_at?: string;
+  governorate?: LocationOption | null;
+  city?: LocationOption | null;
   skills: Array<{
     id: number;
     name: string;
   }>;
+}
+
+export interface PersonalProfileResponse {
+  profile: PersonalProfile;
+  rating_avg: number;
+  reviews_count: number;
+}
+
+export interface ProfileReview {
+  id: number;
+  contract_id: number;
+  reviewer_id: number;
+  reviewed_user_id: number;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+  reviewer?: Pick<WorkBridgeUser, 'id' | 'name'> | null;
+}
+
+export interface UserReviewsResponse {
+  rating_avg: number;
+  reviews_count: number;
+  reviews: ProfileReview[];
 }
 
 export interface PersonalDashboardResponse {
@@ -103,7 +133,7 @@ export interface ServiceRequest {
   service?: Service & { user?: Pick<WorkBridgeUser, 'id' | 'name' | 'email'> };
 }
 
-interface PaginatedResponse<T> {
+export interface PaginatedResponse<T> {
   data: T[];
   current_page: number;
   last_page: number;
@@ -162,6 +192,249 @@ export interface Contract {
   project?: { id: number; title: string } | null;
   service_request?: { id: number; title: string } | null;
   job_post?: { id: number; title: string } | null;
+}
+
+export type JobApplicationStatus = 'pending' | 'accepted' | 'rejected';
+
+export interface JobPost {
+  id: number;
+  company_id: number;
+  title: string;
+  description: string;
+  location_type: 'remote' | 'on_site' | 'hybrid' | null;
+  city_id: number | null;
+  salary: number | string | null;
+  status: 'active' | 'paused' | 'closed';
+  created_at: string;
+  updated_at: string;
+  company?: {
+    id: number;
+    company_name: string;
+    logo: string | null;
+  } | null;
+  city?: (LocationOption & {
+    governorate?: LocationOption | null;
+  }) | null;
+}
+
+export interface JobApplication {
+  id: number;
+  job_id: number;
+  user_id: number;
+  status: JobApplicationStatus;
+  created_at: string;
+  updated_at: string;
+  job: JobPost | null;
+  user?: (Pick<WorkBridgeUser, 'id' | 'name' | 'email'> & {
+    profile?: PersonalProfile | null;
+  }) | null;
+}
+
+export type WalletTransactionDirection = 'credit' | 'debit';
+export type WalletTransactionStatus = 'completed' | string;
+
+export interface WalletTransaction {
+  id: number;
+  wallet_id: number;
+  user_id: number | null;
+  type: string;
+  direction: WalletTransactionDirection;
+  amount: number | string;
+  balance_before: number | string;
+  balance_after: number | string;
+  status: WalletTransactionStatus;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Wallet {
+  id: number;
+  user_id: number | null;
+  type: string;
+  balance: number | string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  transactions: WalletTransaction[];
+}
+
+export interface WalletOperationResponse {
+  status: boolean;
+  message: string;
+  transaction: WalletTransaction;
+}
+
+export interface UserNotification {
+  id: number;
+  user_id: number;
+  type: string | null;
+  title: string;
+  message: string;
+  read_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanyProfile {
+  id: number;
+  user_id: number;
+  governorate_id: number | null;
+  city_id: number | null;
+  company_name: string;
+  logo: string | null;
+  website: string | null;
+  location: string | null;
+  phone: string | null;
+  description: string | null;
+  is_verified: boolean;
+  created_at?: string;
+  updated_at?: string;
+  governorate?: LocationOption | null;
+  city?: LocationOption | null;
+  skills: Array<{
+    id: number;
+    name: string;
+  }>;
+}
+
+export interface UpdateCompanyProfilePayload {
+  company_name: string;
+  website: string | null;
+  location: string | null;
+  governorate_id?: number | null;
+  city_id?: number | null;
+  description: string | null;
+  phone: string | null;
+  skills: string[];
+}
+
+export type ContactPermission = 'all' | 'verified' | 'none';
+
+export interface UserSettings {
+  privacy: {
+    profile_visible: boolean;
+    contact_permission: ContactPermission;
+  };
+  notifications: {
+    message_notifications: boolean;
+  };
+}
+
+export interface PasswordUpdatePayload {
+  current_password: string;
+  password: string;
+  password_confirmation: string;
+}
+
+export interface AdminSettings {
+  critical_dispute_notifications: boolean;
+  company_verification_notifications: boolean;
+}
+
+export type ReportCategory = 'support' | 'complaint' | 'dispute' | 'payment' | 'technical';
+export type ReportPriority = 'low' | 'normal' | 'high';
+export type ReportStatus = 'pending' | 'accepted' | 'rejected' | string;
+export type ReportTargetType = 'user' | 'project' | 'service' | 'contract' | 'general';
+
+export interface ReportUser {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface Report {
+  id: number;
+  reporter_id: number;
+  target_type: ReportTargetType | string;
+  target_id: number;
+  contract_id: number | null;
+  title: string | null;
+  category: ReportCategory | string;
+  priority: ReportPriority | string;
+  description: string;
+  attachments: string[] | null;
+  status: ReportStatus;
+  admin_decision: string | null;
+  created_at: string;
+  updated_at: string;
+  reporter?: ReportUser | null;
+}
+
+export type ProjectStatus = 'active' | 'paused' | 'closed' | string;
+
+export interface ProjectOwner {
+  id: number;
+  name: string;
+  role: string;
+}
+
+export interface ProjectCategory {
+  id: number;
+  name: string;
+}
+
+export interface ProjectSkill {
+  id: number;
+  name: string;
+}
+
+export interface UserProject {
+  id: number;
+  user_id: number;
+  category_id: number;
+  governorate_id: number | null;
+  city_id: number | null;
+  title: string;
+  description: string;
+  budget: number | string;
+  duration_days: number;
+  status: ProjectStatus;
+  created_at: string;
+  updated_at: string;
+  user?: ProjectOwner | null;
+  category?: ProjectCategory | null;
+  governorate?: LocationOption | null;
+  city?: (LocationOption & { governorate_id?: number | null }) | null;
+  skills?: ProjectSkill[];
+}
+
+export interface ProjectApplication {
+  id: number;
+  user_project_id: number;
+  user_id: number;
+  price: number | string;
+  duration_days: number;
+  description: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+  updated_at: string;
+  project?: Pick<UserProject, 'id' | 'title' | 'user_id'> | null;
+  user?: Pick<WorkBridgeUser, 'id' | 'name' | 'email'> | null;
+}
+
+export interface ProjectApplicationPayload {
+  price: number;
+  duration_days: number;
+  description: string;
+}
+
+export interface CreateReportPayload {
+  target_type?: ReportTargetType;
+  target_id?: number;
+  contract_id?: number | null;
+  title?: string | null;
+  category?: ReportCategory;
+  priority?: ReportPriority;
+  description: string;
+  attachments?: string[] | null;
+}
+
+export interface ReportDecisionPayload {
+  status: 'accepted' | 'rejected';
+  admin_decision?: string | null;
+  admin_action?: 'refund_client' | 'release_freelancer';
 }
 
 function unwrapList<T>(value: T[] | PaginatedResponse<T>) {
@@ -312,6 +585,13 @@ export async function getConversationMessages(conversationId: number) {
   return unwrapList(response.messages);
 }
 
+export async function getConversationMessagesPage(conversationId: number, page = 1) {
+  const response = await apiRequest<{
+    messages: PaginatedResponse<ConversationMessage>;
+  }>(`/conversations/${conversationId}/messages?page=${page}`);
+  return response.messages;
+}
+
 export async function sendConversationMessage(conversationId: number, content: string) {
   const response = await apiRequest<{ message: string; data: ConversationMessage }>(
     `/conversations/${conversationId}/messages`,
@@ -350,14 +630,31 @@ export function cancelContract(id: number) {
   return apiRequest(`/contracts/${id}/cancel`, { method: 'POST' });
 }
 
-export async function getJobs<T>() {
-  const response = await apiRequest<{ jobs: T[] }>('/jobs');
-  return response.jobs;
+export async function getJobs() {
+  const response = await apiRequest<{
+    jobs: JobPost[] | PaginatedResponse<JobPost>;
+  }>('/jobs');
+  return unwrapList(response.jobs);
 }
 
-export async function getJob<T>(id: string | number) {
-  const response = await apiRequest<{ job: T }>(`/jobs/${id}`);
+export async function getJob(id: string | number) {
+  const response = await apiRequest<{ job: JobPost }>(`/jobs/${id}`);
   return response.job;
+}
+
+export async function getMyJobApplications() {
+  const response = await apiRequest<{ applications: JobApplication[] }>(
+    '/my-job-applications',
+  );
+  return response.applications;
+}
+
+export async function applyToJob(jobId: string | number) {
+  const response = await apiRequest<{
+    message: string;
+    application: JobApplication;
+  }>(`/jobs/${jobId}/apply`, { method: 'POST' });
+  return response.application;
 }
 
 export function createJob(payload: Record<string, unknown>) {
@@ -372,13 +669,56 @@ export function deleteJob(id: string | number) {
   return apiRequest(`/jobs/${id}`, { method: 'DELETE' });
 }
 
-export async function getProjects<T>() {
-  const response = await apiRequest<{ projects: T[] }>('/projects');
+export async function getCompanyJobs() {
+  const response = await apiRequest<{
+    jobs: JobPost[] | PaginatedResponse<JobPost>;
+  }>('/company/jobs');
+  return unwrapList(response.jobs);
+}
+
+export async function getJobApplications(jobId: string | number) {
+  const response = await apiRequest<{ applications: JobApplication[] }>(
+    `/jobs/${jobId}/applications`,
+  );
+  return response.applications;
+}
+
+export async function updateJobApplicationStatus(
+  applicationId: string | number,
+  status: JobApplicationStatus,
+) {
+  const response = await apiRequest<{ application: JobApplication }>(
+    `/job-applications/${applicationId}/status`,
+    { method: 'PATCH', body: { status } },
+  );
+  return response.application;
+}
+
+export async function getProjects(params?: {
+  page?: number;
+  search?: string;
+  status?: 'active' | 'paused' | 'closed';
+  category_id?: number;
+  governorate_id?: number;
+  city_id?: number;
+  min_price?: number;
+  max_price?: number;
+  type?: string;
+}) {
+  const query = new URLSearchParams();
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      query.set(key, String(value));
+    }
+  });
+  const response = await apiRequest<{ projects: PaginatedResponse<UserProject> }>(
+    `/projects${query.toString() ? `?${query.toString()}` : ''}`,
+  );
   return response.projects;
 }
 
-export async function getProject<T>(id: string | number) {
-  const response = await apiRequest<{ project: T }>(`/projects/${id}`);
+export async function getProject(id: string | number) {
+  const response = await apiRequest<{ project: UserProject }>(`/projects/${id}`);
   return response.project;
 }
 
@@ -394,13 +734,19 @@ export function deleteProject(id: string | number) {
   return apiRequest(`/projects/${id}`, { method: 'DELETE' });
 }
 
-export function applyToProject(projectId: string | number) {
-  return apiRequest(`/projects/${projectId}/applications`, { method: 'POST' });
+export async function applyToProject(
+  projectId: string | number,
+  payload: ProjectApplicationPayload,
+) {
+  const response = await apiRequest<{
+    message: string;
+    application: ProjectApplication;
+  }>(`/projects/${projectId}/applications`, { method: 'POST', body: payload });
+  return response.application;
 }
 
 export async function getProfile() {
-  const response = await apiRequest<{ profile: PersonalProfile }>('/profile');
-  return response.profile;
+  return apiRequest<PersonalProfileResponse>('/profile');
 }
 
 export async function updateProfile(payload: {
@@ -419,13 +765,102 @@ export async function updateProfile(payload: {
   return response.profile;
 }
 
-export async function getCompany<T>() {
+export function getUserReviews(userId: string | number) {
+  return apiRequest<UserReviewsResponse>(`/users/${userId}/reviews`);
+}
+
+export async function getCompany<T = CompanyProfile>() {
   const response = await apiRequest<{ company: T }>('/company');
   return response.company;
 }
 
-export function updateCompany(payload: Record<string, unknown>) {
-  return apiRequest('/company', { method: 'PUT', body: payload });
+export async function updateCompany(payload: UpdateCompanyProfilePayload) {
+  const response = await apiRequest<{ message: string; company: CompanyProfile }>('/company', {
+    method: 'PUT',
+    body: payload,
+  });
+  return response.company;
+}
+
+export async function getUserSettings() {
+  const response = await apiRequest<{ settings: UserSettings }>('/settings');
+  return response.settings;
+}
+
+export async function updatePrivacySettings(payload: UserSettings['privacy']) {
+  const response = await apiRequest<{ message: string; settings: UserSettings }>(
+    '/settings/privacy',
+    { method: 'PUT', body: payload },
+  );
+  return response.settings;
+}
+
+export async function updateNotificationSettings(payload: UserSettings['notifications']) {
+  const response = await apiRequest<{ message: string; settings: UserSettings }>(
+    '/settings/notifications',
+    { method: 'PUT', body: payload },
+  );
+  return response.settings;
+}
+
+export function updatePassword(payload: PasswordUpdatePayload) {
+  return apiRequest<{ message: string }>('/settings/password', {
+    method: 'PUT',
+    body: payload,
+  });
+}
+
+export function clearSettingsLocalData() {
+  return apiRequest<{ message: string; deleted_notifications: number }>(
+    '/settings/local-data',
+    { method: 'DELETE' },
+  );
+}
+
+export async function getAdminSettings() {
+  const response = await apiRequest<{ settings: AdminSettings }>('/admin/settings');
+  return response.settings;
+}
+
+export async function updateAdminSettings(payload: AdminSettings) {
+  const response = await apiRequest<{ message: string; settings: AdminSettings }>(
+    '/admin/settings',
+    { method: 'PUT', body: payload },
+  );
+  return response.settings;
+}
+
+export async function getMyReports(page = 1) {
+  const response = await apiRequest<{ reports: PaginatedResponse<Report> }>(
+    `/reports/my?page=${page}`,
+  );
+  return response.reports;
+}
+
+export async function createReport(payload: CreateReportPayload) {
+  const response = await apiRequest<{ message: string; report: Report }>('/reports', {
+    method: 'POST',
+    body: payload,
+  });
+  return response.report;
+}
+
+export async function getLatestReport() {
+  const response = await apiRequest<{ report: Report | null }>('/reports/latest');
+  return response.report;
+}
+
+export async function getAllReports() {
+  const response = await apiRequest<{ reports: Report[] }>('/reports');
+  return response.reports;
+}
+
+export async function updateReportDecision(id: string | number, payload: ReportDecisionPayload) {
+  const response = await apiRequest<{ message: string; report: Report }>(
+    `/reports/${id}/decision`,
+    { method: 'PUT', body: payload },
+  );
+  return response.report;
 }
 
 export function getDashboard<T>(role: WorkBridgeUser['role']) {
@@ -437,21 +872,66 @@ export function getPersonalDashboard() {
   return apiRequest<PersonalDashboardResponse>('/dashboard/personal');
 }
 
-export async function getWallet<T>() {
-  const response = await apiRequest<{ wallet: T }>('/wallet');
+export async function getMyWallet() {
+  const response = await apiRequest<{ status: boolean; wallet: Wallet }>('/wallet');
   return response.wallet;
 }
 
-export async function getNotifications<T>() {
-  const response = await apiRequest<{ notifications: { data?: T[] } | T[] }>('/notifications');
-  return Array.isArray(response.notifications)
-    ? response.notifications
-    : response.notifications.data || [];
+export function depositWallet(amount: number) {
+  return apiRequest<WalletOperationResponse>(
+    '/wallet/deposit',
+    { method: 'POST', body: { amount } },
+  );
+}
+
+export function withdrawFromWallet(amount: number) {
+  return apiRequest<WalletOperationResponse>('/wallet/withdraw', {
+    method: 'POST',
+    body: { amount },
+  });
+}
+
+export function transferWalletToAdmin(amount: number) {
+  return apiRequest<WalletOperationResponse>('/wallet/transfer-to-admin', {
+    method: 'POST',
+    body: { amount },
+  });
+}
+
+export async function getNotifications(page = 1) {
+  const response = await apiRequest<{
+    notifications: PaginatedResponse<UserNotification>;
+  }>(`/notifications?page=${page}`);
+  return response.notifications;
 }
 
 export async function getUnreadNotificationCount() {
-  const response = await apiRequest<{ unread_count: number }>('/notifications/unread-count');
-  return response.unread_count;
+  const response = await apiRequest<{ unread_count: number | string }>(
+    '/notifications/unread-count',
+  );
+  const count = Number(response.unread_count);
+  return Number.isFinite(count) && count >= 0 ? count : 0;
+}
+
+export async function markNotificationAsRead(id: string | number) {
+  const response = await apiRequest<{
+    message: string;
+    notification: UserNotification;
+  }>(`/notifications/${id}/read`, { method: 'POST' });
+  return response.notification;
+}
+
+export function markAllNotificationsAsRead() {
+  return apiRequest<{ message: string; updated_count: number }>(
+    '/notifications/read-all',
+    { method: 'POST' },
+  );
+}
+
+export function deleteNotification(id: string | number) {
+  return apiRequest<{ message: string }>(`/notifications/${id}`, {
+    method: 'DELETE',
+  });
 }
 
 export interface AdminReviewUser extends WorkBridgeUser {
