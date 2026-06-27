@@ -34,7 +34,7 @@ export default function Register() {
   const [statusMessage, setStatusMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const companyVerificationEmail = 'support@workbridge.com';
+  const companyVerificationEmail = 'workbridgeAdmin@gmail.com';
 
   const handleRegister = async () => {
     setStatusMessage('');

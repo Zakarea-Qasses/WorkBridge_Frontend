@@ -95,10 +95,10 @@ export default function EmailVerification() {
         ? `We sent a 6-digit code to ${email || 'your email address'}. The code expires in 10 minutes, so please enter it soon.`
         : `أرسلنا رمزا مكونا من 6 أرقام إلى ${email || 'بريدك الإلكتروني'}. تنتهي صلاحية الرمز خلال 10 دقائق، لذلك يرجى إدخاله الآن.`,
       openGmail: isEnglish ? 'Open Gmail' : 'فتح Gmail',
-      openOutlook: isEnglish ? 'Open Outlook' : 'فتح Outlook',
-      help: isEnglish
-        ? "Can't find your code? Check your spam folder."
-        : 'لم تجد الرمز؟ تحقق من مجلد الرسائل غير المرغوب فيها.',
+      spamTitle: isEnglish ? "Can't find your code?" : 'لم تجد رمز التحقق؟',
+      spamHelp: isEnglish
+        ? 'Please check the Spam folder in Gmail. Sometimes verification emails arrive there.'
+        : 'تأكد من مجلد Spam في Gmail، أحياناً يصل رمز التحقق إلى الرسائل غير المرغوب فيها.',
       backToLogin: isEnglish ? 'Back to login' : 'العودة لتسجيل الدخول',
       resend: isEnglish ? 'Resend code' : 'إعادة إرسال الكود',
       resending: isEnglish ? 'Sending...' : 'جاري الإرسال...',
@@ -319,23 +319,17 @@ export default function EmailVerification() {
             href="https://mail.google.com"
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 text-slate-700 hover:text-primary"
+            className="inline-flex items-center gap-2 rounded-md border border-red-100 bg-red-50 px-4 py-2 font-medium text-slate-700 transition hover:border-red-200 hover:text-primary"
           >
             <Mail className="size-4 text-red-500" />
             {text.openGmail}
           </a>
-          <a
-            href="https://outlook.live.com/mail/"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 text-slate-700 hover:text-primary"
-          >
-            <Mail className="size-4 text-blue-600" />
-            {text.openOutlook}
-          </a>
         </div>
 
-        <p className="mt-5 text-sm text-slate-600">{text.help}</p>
+        <div className="mt-5 max-w-xl rounded-lg border border-amber-200 bg-amber-50 px-5 py-4 text-start text-sm text-amber-900">
+          <p className="font-semibold">{text.spamTitle}</p>
+          <p className="mt-1 leading-6">{text.spamHelp}</p>
+        </div>
         <p className="mt-3 text-sm font-medium text-primary">
           {remainingSeconds > 0 ? text.resendCountdown : text.resendAvailable}
         </p>

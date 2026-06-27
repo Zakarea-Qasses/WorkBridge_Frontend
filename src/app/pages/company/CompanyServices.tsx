@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { RefreshCw, Search } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { Badge, Button, Card, CardContent, Input } from '@/app/components/ui';
@@ -7,6 +8,7 @@ import { useLanguage } from '@/app/providers/LanguageProvider';
 
 export default function CompanyServices() {
   const { isEnglish, language } = useLanguage();
+  const navigate = useNavigate();
   const [services, setServices] = useState<Service[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -72,6 +74,9 @@ export default function CompanyServices() {
                   </div>
                   <p className="text-sm text-muted-foreground">{service.description || (isEnglish ? 'No description.' : 'لا يوجد وصف.')}</p>
                   <div className="flex gap-4 text-sm"><span>{service.price}</span><span>{service.delivery_days} {isEnglish ? 'days' : 'يوم'}</span></div>
+                  <Button onClick={() => navigate(`/services/${service.id}/request`)}>
+                    {isEnglish ? 'Apply for service' : 'تقديم على الخدمة'}
+                  </Button>
                 </CardContent>
               </Card>
             ))}

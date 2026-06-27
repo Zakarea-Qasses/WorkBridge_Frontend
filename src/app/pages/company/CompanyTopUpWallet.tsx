@@ -1,23 +1,9 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { CreditCard, Landmark, Wallet } from 'lucide-react';
+import { AlertCircle, CreditCard, LoaderCircle, Wallet } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
-import {
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Input,
-  Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/app/components/ui';
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import { depositWallet } from '@/app/api/endpoints';
 
@@ -25,42 +11,8 @@ export default function CompanyTopUpWallet() {
   const { language, isEnglish } = useLanguage();
   const navigate = useNavigate();
   const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState(
-    isEnglish ? 'Corporate bank transfer' : 'تحويل بنكي للشركة',
-  );
-  const [reference, setReference] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const parsedAmount = Number(amount);
-    if (!parsedAmount || parsedAmount <= 0) {
-      setError(
-        isEnglish
-          ? 'Enter a valid amount to top up the wallet.'
-          : 'أدخل مبلغًا صحيحًا لشحن المحفظة.',
-      );
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      setError('');
-      await depositWallet(parsedAmount);
-      navigate('/company/wallet');
-    } catch (requestError) {
-      const validationMessage = getValidationErrors(requestError).amount?.[0];
-      setError(
-        validationMessage ||
-          getApiErrorMessage(requestError) ||
-          (isEnglish ? 'Unable to top up the wallet.' : 'تعذر شحن المحفظة.'),
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleAmountChange = (value: string) => {
     const digitsOnly = value.replace(/[^\d]/g, '');
@@ -73,11 +25,7 @@ export default function CompanyTopUpWallet() {
 
     if (Number(digitsOnly) === 0) {
       setAmount('');
-      setError(
-        isEnglish
-          ? 'You cannot enter 0 as a top-up amount.'
-          : 'لا يمكن إدخال 0 كمبلغ لإضافة الرصيد.',
-      );
+      setError(isEnglish ? 'You cannot enter 0 as a top-up amount.' : 'لا يمكن إدخال 0 كمبلغ للإيداع.');
       return;
     }
 
@@ -85,24 +33,48 @@ export default function CompanyTopUpWallet() {
     setError('');
   };
 
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const parsedAmount = Number(amount);
+    if (!parsedAmount || parsedAmount <= 0) {
+      setError(isEnglish ? 'Enter a valid amount to top up the wallet.' : 'أدخل مبلغا صحيحا لإيداعه في المحفظة.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setError('');
+      await depositWallet(parsedAmount);
+      navigate('/company/wallet', {
+        state: { walletMessage: isEnglish ? 'Amount deposited successfully.' : 'تم إيداع المبلغ بنجاح.' },
+      });
+    } catch (requestError) {
+      const validationMessage = getValidationErrors(requestError).amount?.[0];
+      setError(
+        validationMessage ||
+          getApiErrorMessage(requestError) ||
+          (isEnglish ? 'Unable to top up the wallet.' : 'تعذر إيداع المبلغ في المحفظة.'),
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <DashboardLayout userType="company">
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">
-              {isEnglish ? 'Top up company wallet' : 'إضافة رصيد إلى محفظة الشركة'}
-            </h1>
+            <h1 className="text-3xl font-bold">{isEnglish ? 'Top up company wallet' : 'إيداع في محفظة الشركة'}</h1>
             <p className="mt-1 text-muted-foreground">
               {isEnglish
-                ? 'Add balance to the company wallet from a dedicated standalone screen.'
-                : 'أضف رصيدًا إلى محفظة الشركة من خلال واجهة مستقلة ومخصصة.'}
+                ? 'Add balance directly to the authenticated company wallet.'
+                : 'أضف رصيدا مباشرة إلى محفظة حساب الشركة المسجل.'}
             </p>
           </div>
           <Button asChild variant="outline">
-            <Link to="/company/wallet">
-              {isEnglish ? 'Back to company wallet' : 'العودة إلى محفظة الشركة'}
-            </Link>
+            <Link to="/company/wallet">{isEnglish ? 'Back to wallet' : 'العودة إلى المحفظة'}</Link>
           </Button>
         </div>
 
@@ -110,12 +82,12 @@ export default function CompanyTopUpWallet() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Wallet className="size-5 text-primary" />
-              {isEnglish ? 'Top up balance' : 'تعبئة الرصيد'}
+              {isEnglish ? 'Deposit amount' : 'مبلغ الإيداع'}
             </CardTitle>
             <CardDescription>
               {isEnglish
-                ? 'Once confirmed, the balance will be added directly to the company wallet inside the interface.'
-                : 'بعد التأكيد سيُضاف الرصيد مباشرة إلى محفظة الشركة داخل الواجهة.'}
+                ? 'This action uses the backend wallet deposit endpoint and updates the company balance.'
+                : 'هذه العملية مرتبطة بالباك وتحدث رصيد محفظة الشركة مباشرة.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -129,56 +101,27 @@ export default function CompanyTopUpWallet() {
                   min="1"
                   value={amount}
                   onChange={(event) => handleAmountChange(event.target.value)}
-                  placeholder={isEnglish ? 'Enter the requested amount' : 'أدخل المبلغ المطلوب'}
+                  placeholder={isEnglish ? 'Enter amount' : 'أدخل المبلغ'}
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="company-top-up-method">
-                  {isEnglish ? 'Payment method' : 'طريقة الدفع'}
-                </Label>
-                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <SelectTrigger id="company-top-up-method">
-                    <SelectValue placeholder={isEnglish ? 'Select payment method' : 'اختر طريقة الدفع'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={isEnglish ? 'Corporate bank transfer' : 'تحويل بنكي للشركة'}>
-                      {isEnglish ? 'Corporate bank transfer' : 'تحويل بنكي للشركة'}
-                    </SelectItem>
-                    <SelectItem value={isEnglish ? 'Corporate bank card' : 'بطاقة بنكية للشركة'}>
-                      {isEnglish ? 'Corporate bank card' : 'بطاقة بنكية للشركة'}
-                    </SelectItem>
-                    <SelectItem value={isEnglish ? 'Corporate online payment' : 'دفع إلكتروني للشركة'}>
-                      {isEnglish ? 'Corporate online payment' : 'دفع إلكتروني للشركة'}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="company-top-up-reference">
-                  {isEnglish ? 'Transaction reference' : 'مرجع العملية'}
-                </Label>
-                <Input
-                  id="company-top-up-reference"
-                  value={reference}
-                  onChange={(event) => setReference(event.target.value)}
-                  placeholder={isEnglish ? 'Optional' : 'اختياري'}
-                />
-              </div>
-
-              {error && <p className="text-sm text-destructive">{error}</p>}
+              {error && (
+                <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                  <AlertCircle className="size-4" />
+                  <span>{error}</span>
+                </div>
+              )}
 
               <div className="flex flex-wrap items-center gap-3">
                 <Button type="submit" className="gap-2" disabled={isSubmitting}>
-                  <CreditCard className="size-4" />
+                  {isSubmitting ? <LoaderCircle className="size-4 animate-spin" /> : <CreditCard className="size-4" />}
                   {isSubmitting
                     ? isEnglish
-                      ? 'Adding balance...'
-                      : 'جار إضافة الرصيد...'
+                      ? 'Depositing...'
+                      : 'جار الإيداع...'
                     : isEnglish
-                      ? 'Confirm top up'
-                      : 'تأكيد الشحن'}
+                      ? 'Confirm deposit'
+                      : 'تأكيد الإيداع'}
                 </Button>
                 <Button asChild type="button" variant="outline">
                   <Link to="/company/wallet">{isEnglish ? 'Cancel' : 'إلغاء'}</Link>
@@ -187,36 +130,6 @@ export default function CompanyTopUpWallet() {
             </form>
           </CardContent>
         </Card>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2 text-sm">
-                <CreditCard className="size-4 text-primary" />
-                {isEnglish ? 'Quick top up using corporate payment methods' : 'شحن سريع بوسائل دفع الشركة'}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2 text-sm">
-                <Landmark className="size-4 text-primary" />
-                {isEnglish
-                  ? 'Bank transfer dedicated to company accounts'
-                  : 'تحويل بنكي مخصص لحسابات الشركات'}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-sm text-muted-foreground">
-                {isEnglish
-                  ? 'The amount is added to the authenticated company wallet.'
-                  : 'يُضاف المبلغ إلى محفظة الشركة المسجلة في الباك.'}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </div>
     </DashboardLayout>
   );

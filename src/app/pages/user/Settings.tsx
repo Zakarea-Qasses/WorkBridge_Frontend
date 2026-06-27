@@ -24,28 +24,29 @@ import {
 } from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import {
-  AdminSettings,
+  type AdminSettings,
   clearSettingsLocalData,
-  CompanyProfile,
-  ContactPermission,
+  type CompanyProfile,
+  type ContactPermission,
   getAdminSettings,
   getCompany,
   getProfile,
   getUserSettings,
-  PersonalProfileResponse,
+  type PersonalProfileResponse,
   updateAdminSettings,
   updateCompany,
   updateNotificationSettings,
   updatePassword,
   updatePrivacySettings,
   updateProfile,
-  UserSettings,
+  type UserSettings,
 } from '@/app/api/endpoints';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 
 type UserType = 'user' | 'company' | 'admin';
 type Status = { type: 'success' | 'error'; message: string } | null;
+type SavingSection = 'profile' | 'password' | 'privacy' | 'notifications' | 'admin' | 'clear' | null;
 
 interface ProfileDraft {
   name: string;
@@ -127,6 +128,26 @@ function splitSkills(value: string) {
     .filter(Boolean);
 }
 
+function translateValidationMessage(message: string, isEnglish: boolean) {
+  if (isEnglish) return message;
+
+  const messages: Record<string, string> = {
+    'The skills field is required.': 'حقل المهارات مطلوب.',
+    'The company name field is required.': 'اسم الشركة مطلوب.',
+    'The name field is required.': 'الاسم مطلوب.',
+    'The password field confirmation does not match.': 'تأكيد كلمة المرور غير مطابق.',
+    'The current password field is required.': 'كلمة المرور الحالية مطلوبة.',
+    'The password field is required.': 'كلمة المرور الجديدة مطلوبة.',
+  };
+
+  return messages[message] || message;
+}
+
+function FieldError({ errors, isEnglish }: { errors?: string[]; isEnglish: boolean }) {
+  if (!errors?.[0]) return null;
+  return <p className="text-xs text-destructive">{translateValidationMessage(errors[0], isEnglish)}</p>;
+}
+
 function getTitle(userType: UserType, isEnglish: boolean) {
   if (userType === 'company') return isEnglish ? 'Company Settings' : 'إعدادات الشركة';
   if (userType === 'admin') return isEnglish ? 'Admin Settings' : 'إعدادات الإدارة';
@@ -149,7 +170,7 @@ function StatusMessage({ status }: { status: Status }) {
       ) : (
         <AlertCircle className="size-4 shrink-0" />
       )}
-      {status.message}
+      <span>{status.message}</span>
     </div>
   );
 }
@@ -164,12 +185,9 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [status, setStatus] = useState<Status>(null);
   const [loading, setLoading] = useState(true);
+  const [savingSection, setSavingSection] = useState<SavingSection>(null);
   const requestIdRef = useRef(0);
-  const [savingSection, setSavingSection] = useState<
-    'profile' | 'password' | 'privacy' | 'notifications' | 'admin' | 'clear' | null
-  >(null);
 
-  const dashboardType = userType;
   const isAdmin = userType === 'admin';
   const isCompany = userType === 'company';
 
@@ -208,9 +226,7 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
       if (requestId !== requestIdRef.current) return;
       setStatus({
         type: 'error',
-        message:
-          getApiErrorMessage(error) ||
-          (isEnglish ? 'Could not load settings.' : 'تعذر تحميل الإعدادات'),
+        message: getApiErrorMessage(error) || (isEnglish ? 'Could not load settings.' : 'تعذر تحميل الإعدادات.'),
       });
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
@@ -262,12 +278,7 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
           bio: profileDraft.description.trim() || null,
           skills: splitSkills(profileDraft.skills),
         });
-        setProfileDraft(
-          profileDraftFromPersonal(
-            { profile: updated, rating_avg: 0, reviews_count: 0 },
-            profileDraft.name.trim(),
-          ),
-        );
+        setProfileDraft(profileDraftFromPersonal({ profile: updated, rating_avg: 0, reviews_count: 0 }, profileDraft.name.trim()));
       }
 
       await refreshUser();
@@ -276,22 +287,16 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
         message: isCompany
           ? isEnglish
             ? 'Company settings saved successfully.'
-            : 'تم حفظ إعدادات الشركة بنجاح'
+            : 'تم حفظ إعدادات الشركة بنجاح.'
           : isEnglish
             ? 'Personal profile settings saved successfully.'
-            : 'تم حفظ إعدادات الملف الشخصي بنجاح',
+            : 'تم حفظ إعدادات الملف الشخصي بنجاح.',
       });
     } catch (error) {
       setFieldErrors(getValidationErrors(error));
       setStatus({
         type: 'error',
-        message: isCompany
-          ? isEnglish
-            ? 'Could not save company settings.'
-            : 'تعذر حفظ إعدادات الشركة'
-          : isEnglish
-            ? 'Could not save personal profile settings.'
-            : 'تعذر حفظ إعدادات الملف الشخصي',
+        message: getApiErrorMessage(error) || (isEnglish ? 'Could not save settings.' : 'تعذر حفظ الإعدادات.'),
       });
     } finally {
       setSavingSection(null);
@@ -307,15 +312,13 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
       setPasswordDraft(emptyPasswordDraft);
       setStatus({
         type: 'success',
-        message: isEnglish
-          ? 'Password updated successfully.'
-          : 'تم تحديث كلمة المرور بنجاح',
+        message: isEnglish ? 'Password updated successfully.' : 'تم تحديث كلمة المرور بنجاح.',
       });
     } catch (error) {
       setFieldErrors(getValidationErrors(error));
       setStatus({
         type: 'error',
-        message: getApiErrorMessage(error) || (isEnglish ? 'Could not update password.' : 'تعذر تحديث كلمة المرور'),
+        message: getApiErrorMessage(error) || (isEnglish ? 'Could not update password.' : 'تعذر تحديث كلمة المرور.'),
       });
     } finally {
       setSavingSection(null);
@@ -331,13 +334,14 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
       setSettings(updated);
       setStatus({
         type: 'success',
-        message: isEnglish ? 'Privacy settings saved.' : 'تم حفظ إعدادات الخصوصية',
+        message: isEnglish ? 'Privacy settings saved.' : 'تم حفظ إعدادات الخصوصية.',
       });
     } catch (error) {
       setFieldErrors(getValidationErrors(error));
       setStatus({
         type: 'error',
-        message: getApiErrorMessage(error) || (isEnglish ? 'Could not save privacy settings.' : 'تعذر حفظ إعدادات الخصوصية'),
+        message:
+          getApiErrorMessage(error) || (isEnglish ? 'Could not save privacy settings.' : 'تعذر حفظ إعدادات الخصوصية.'),
       });
     } finally {
       setSavingSection(null);
@@ -353,15 +357,15 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
       setSettings(updated);
       setStatus({
         type: 'success',
-        message: isEnglish
-          ? 'Notification preferences saved.'
-          : 'تم حفظ تفضيلات الإشعارات',
+        message: isEnglish ? 'Notification preferences saved.' : 'تم حفظ تفضيلات الإشعارات.',
       });
     } catch (error) {
       setFieldErrors(getValidationErrors(error));
       setStatus({
         type: 'error',
-        message: getApiErrorMessage(error) || (isEnglish ? 'Could not save notification preferences.' : 'تعذر حفظ تفضيلات الإشعارات'),
+        message:
+          getApiErrorMessage(error) ||
+          (isEnglish ? 'Could not save notification preferences.' : 'تعذر حفظ تفضيلات الإشعارات.'),
       });
     } finally {
       setSavingSection(null);
@@ -379,17 +383,20 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
         message: isEnglish ? 'Admin settings saved successfully.' : 'تم حفظ إعدادات الإدارة بنجاح.',
       });
     } catch (error) {
-      setStatus({ type: 'error', message: getApiErrorMessage(error) });
+      setStatus({
+        type: 'error',
+        message: getApiErrorMessage(error) || (isEnglish ? 'Could not save admin settings.' : 'تعذر حفظ إعدادات الإدارة.'),
+      });
     } finally {
       setSavingSection(null);
     }
   };
 
-  const clearLocalData = async () => {
+  const clearBackendData = async () => {
     const confirmed = window.confirm(
       isEnglish
-        ? 'Are you sure you want to clear local data?'
-        : 'هل أنت متأكد من مسح البيانات المحلية؟',
+        ? 'Are you sure you want to clear the backend data available for this setting?'
+        : 'هل أنت متأكد من حذف البيانات المتاحة عبر الباك لهذا الإعداد؟',
     );
     if (!confirmed) return;
 
@@ -399,10 +406,13 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
       const response = await clearSettingsLocalData();
       setStatus({
         type: 'success',
-        message: `${isEnglish ? 'Data cleared successfully.' : 'تم مسح البيانات بنجاح'} (${response.deleted_notifications})`,
+        message: `${isEnglish ? 'Data cleared successfully.' : 'تم حذف البيانات بنجاح.'} (${response.deleted_notifications})`,
       });
     } catch (error) {
-      setStatus({ type: 'error', message: getApiErrorMessage(error) });
+      setStatus({
+        type: 'error',
+        message: getApiErrorMessage(error) || (isEnglish ? 'Could not clear data.' : 'تعذر حذف البيانات.'),
+      });
     } finally {
       setSavingSection(null);
     }
@@ -418,14 +428,12 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
   );
 
   return (
-    <DashboardLayout userType={dashboardType}>
+    <DashboardLayout userType={userType}>
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <div>
           <h1 className="text-3xl font-bold">{getTitle(userType, isEnglish)}</h1>
           <p className="mt-1 text-muted-foreground">
-            {isEnglish
-              ? 'Manage account settings through the backend.'
-              : 'إدارة إعدادات الحساب من خلال الباك.'}
+            {isEnglish ? 'Manage account settings through the backend.' : 'إدارة إعدادات الحساب من خلال الباك.'}
           </p>
         </div>
 
@@ -443,17 +451,13 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
             <CardHeader>
               <CardTitle>{isEnglish ? 'Administrative alerts' : 'تنبيهات الإدارة'}</CardTitle>
               <CardDescription>
-                {isEnglish
-                  ? 'Saved through /admin/settings.'
-                  : 'يتم حفظها عبر /admin/settings.'}
+                {isEnglish ? 'Saved through /admin/settings.' : 'يتم حفظها عبر /admin/settings.'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="flex items-center justify-between gap-4 rounded-md border p-4">
                 <div>
-                  <p className="font-medium">
-                    {isEnglish ? 'Critical dispute alerts' : 'تنبيهات النزاعات الحرجة'}
-                  </p>
+                  <p className="font-medium">{isEnglish ? 'Critical dispute alerts' : 'تنبيهات النزاعات الحرجة'}</p>
                   <p className="text-sm text-muted-foreground">
                     {isEnglish
                       ? 'Notify admins about high priority disputes.'
@@ -463,10 +467,7 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
                 <Switch
                   checked={adminSettings.critical_dispute_notifications}
                   onCheckedChange={(value) =>
-                    setAdminSettings((current) => ({
-                      ...current,
-                      critical_dispute_notifications: value,
-                    }))
+                    setAdminSettings((current) => ({ ...current, critical_dispute_notifications: value }))
                   }
                 />
               </div>
@@ -485,18 +486,13 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
                 <Switch
                   checked={adminSettings.company_verification_notifications}
                   onCheckedChange={(value) =>
-                    setAdminSettings((current) => ({
-                      ...current,
-                      company_verification_notifications: value,
-                    }))
+                    setAdminSettings((current) => ({ ...current, company_verification_notifications: value }))
                   }
                 />
               </div>
 
               <Button disabled={savingSection === 'admin'} onClick={saveAdminSettings}>
-                {savingSection === 'admin' ? (
-                  <LoaderCircle className="me-2 size-4 animate-spin" />
-                ) : null}
+                {savingSection === 'admin' ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
                 {isEnglish ? 'Save settings' : 'حفظ الإعدادات'}
               </Button>
             </CardContent>
@@ -505,16 +501,10 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
           <Tabs defaultValue="profile" className="space-y-6">
             <TabsList>
               <TabsTrigger value="profile">{isEnglish ? 'Profile' : 'الملف'}</TabsTrigger>
-              <TabsTrigger value="password">
-                {isEnglish ? 'Password' : 'كلمة المرور'}
-              </TabsTrigger>
+              <TabsTrigger value="password">{isEnglish ? 'Password' : 'كلمة المرور'}</TabsTrigger>
               <TabsTrigger value="privacy">{isEnglish ? 'Privacy' : 'الخصوصية'}</TabsTrigger>
-              <TabsTrigger value="notifications">
-                {isEnglish ? 'Notifications' : 'الإشعارات'}
-              </TabsTrigger>
-              <TabsTrigger value="local-data">
-                {isEnglish ? 'Local Data' : 'البيانات المحلية'}
-              </TabsTrigger>
+              <TabsTrigger value="notifications">{isEnglish ? 'Notifications' : 'الإشعارات'}</TabsTrigger>
+              <TabsTrigger value="data">{isEnglish ? 'Data' : 'البيانات'}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="profile">
@@ -524,41 +514,29 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
                   <CardDescription>
                     {isCompany
                       ? isEnglish
-                        ? 'Saved through PUT /company.'
-                        : 'يتم حفظها عبر PUT /company.'
+                        ? 'Loaded from GET /company and saved through PUT /company.'
+                        : 'يتم تحميلها من GET /company وحفظها عبر PUT /company.'
                       : isEnglish
-                        ? 'Saved through PUT /profile.'
-                        : 'يتم حفظها عبر PUT /profile.'}
+                        ? 'Loaded from GET /profile and saved through PUT /profile.'
+                        : 'يتم تحميلها من GET /profile وحفظها عبر PUT /profile.'}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="settings-name">
-                      {isCompany
-                        ? isEnglish
-                          ? 'Company name'
-                          : 'اسم الشركة'
-                        : isEnglish
-                          ? 'Name'
-                          : 'الاسم'}
+                      {isCompany ? (isEnglish ? 'Company name' : 'اسم الشركة') : isEnglish ? 'Name' : 'الاسم'}
                     </Label>
                     <Input
                       id="settings-name"
                       value={profileDraft.name}
                       onChange={(event) => updateProfileField('name', event.target.value)}
                     />
-                    {(fieldErrors.name?.[0] || fieldErrors.company_name?.[0]) ? (
-                      <p className="text-xs text-destructive">
-                        {fieldErrors.name?.[0] || fieldErrors.company_name?.[0]}
-                      </p>
-                    ) : null}
+                    <FieldError errors={fieldErrors.name || fieldErrors.company_name} isEnglish={isEnglish} />
                   </div>
 
                   {!isCompany ? (
                     <div className="space-y-2">
-                      <Label htmlFor="settings-title">
-                        {isEnglish ? 'Professional title' : 'المسمى المهني'}
-                      </Label>
+                      <Label htmlFor="settings-title">{isEnglish ? 'Professional title' : 'المسمى المهني'}</Label>
                       <Input
                         id="settings-title"
                         value={profileDraft.title}
@@ -568,33 +546,27 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
                   ) : null}
 
                   <div className="space-y-2">
-                    <Label htmlFor="settings-description">
-                      {isEnglish ? 'Description' : 'الوصف'}
-                    </Label>
+                    <Label htmlFor="settings-description">{isEnglish ? 'Description' : 'الوصف'}</Label>
                     <Textarea
                       id="settings-description"
                       rows={4}
                       value={profileDraft.description}
                       onChange={(event) => updateProfileField('description', event.target.value)}
                     />
+                    <FieldError errors={fieldErrors.description} isEnglish={isEnglish} />
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="settings-location">
-                        {isCompany
-                          ? isEnglish
-                            ? 'Location'
-                            : 'الموقع'
-                          : isEnglish
-                            ? 'Address'
-                            : 'العنوان'}
+                        {isCompany ? (isEnglish ? 'Location' : 'الموقع') : isEnglish ? 'Address' : 'العنوان'}
                       </Label>
                       <Input
                         id="settings-location"
                         value={profileDraft.location}
                         onChange={(event) => updateProfileField('location', event.target.value)}
                       />
+                      <FieldError errors={fieldErrors.location || fieldErrors.address} isEnglish={isEnglish} />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="settings-phone">{isEnglish ? 'Phone' : 'الهاتف'}</Label>
@@ -603,22 +575,19 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
                         value={profileDraft.phone}
                         onChange={(event) => updateProfileField('phone', event.target.value)}
                       />
+                      <FieldError errors={fieldErrors.phone} isEnglish={isEnglish} />
                     </div>
                   </div>
 
                   {isCompany ? (
                     <div className="space-y-2">
-                      <Label htmlFor="settings-website">
-                        {isEnglish ? 'Website' : 'الموقع الإلكتروني'}
-                      </Label>
+                      <Label htmlFor="settings-website">{isEnglish ? 'Website' : 'الموقع الإلكتروني'}</Label>
                       <Input
                         id="settings-website"
                         value={profileDraft.website}
                         onChange={(event) => updateProfileField('website', event.target.value)}
                       />
-                      {fieldErrors.website?.[0] ? (
-                        <p className="text-xs text-destructive">{fieldErrors.website[0]}</p>
-                      ) : null}
+                      <FieldError errors={fieldErrors.website} isEnglish={isEnglish} />
                     </div>
                   ) : null}
 
@@ -631,12 +600,11 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
                       value={profileDraft.skills}
                       onChange={(event) => updateProfileField('skills', event.target.value)}
                     />
+                    <FieldError errors={fieldErrors.skills} isEnglish={isEnglish} />
                   </div>
 
                   <Button disabled={savingSection === 'profile'} onClick={saveProfile}>
-                    {savingSection === 'profile' ? (
-                      <LoaderCircle className="me-2 size-4 animate-spin" />
-                    ) : null}
+                    {savingSection === 'profile' ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
                     {isEnglish ? 'Save changes' : 'حفظ التغييرات'}
                   </Button>
                 </CardContent>
@@ -648,9 +616,7 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
                 <CardHeader>
                   <CardTitle>{isEnglish ? 'Change password' : 'تغيير كلمة المرور'}</CardTitle>
                   <CardDescription>
-                    {isEnglish
-                      ? 'Saved through PUT /settings/password.'
-                      : 'يتم حفظها عبر PUT /settings/password.'}
+                    {isEnglish ? 'Saved through PUT /settings/password.' : 'يتم حفظها عبر PUT /settings/password.'}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -659,13 +625,9 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
                     autoComplete="current-password"
                     placeholder={isEnglish ? 'Current password' : 'كلمة المرور الحالية'}
                     value={passwordDraft.current_password}
-                    onChange={(event) =>
-                      updatePasswordField('current_password', event.target.value)
-                    }
+                    onChange={(event) => updatePasswordField('current_password', event.target.value)}
                   />
-                  {fieldErrors.current_password?.[0] ? (
-                    <p className="text-xs text-destructive">{fieldErrors.current_password[0]}</p>
-                  ) : null}
+                  <FieldError errors={fieldErrors.current_password} isEnglish={isEnglish} />
                   <Input
                     type="password"
                     autoComplete="new-password"
@@ -673,27 +635,17 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
                     value={passwordDraft.password}
                     onChange={(event) => updatePasswordField('password', event.target.value)}
                   />
-                  {fieldErrors.password?.[0] ? (
-                    <p className="text-xs text-destructive">{fieldErrors.password[0]}</p>
-                  ) : null}
+                  <FieldError errors={fieldErrors.password} isEnglish={isEnglish} />
                   <Input
                     type="password"
                     autoComplete="new-password"
                     placeholder={isEnglish ? 'Confirm new password' : 'تأكيد كلمة المرور'}
                     value={passwordDraft.password_confirmation}
-                    onChange={(event) =>
-                      updatePasswordField('password_confirmation', event.target.value)
-                    }
+                    onChange={(event) => updatePasswordField('password_confirmation', event.target.value)}
                   />
-                  {fieldErrors.password_confirmation?.[0] ? (
-                    <p className="text-xs text-destructive">
-                      {fieldErrors.password_confirmation[0]}
-                    </p>
-                  ) : null}
+                  <FieldError errors={fieldErrors.password_confirmation} isEnglish={isEnglish} />
                   <Button disabled={savingSection === 'password'} onClick={savePassword}>
-                    {savingSection === 'password' ? (
-                      <LoaderCircle className="me-2 size-4 animate-spin" />
-                    ) : null}
+                    {savingSection === 'password' ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
                     {isEnglish ? 'Update password' : 'تحديث كلمة المرور'}
                   </Button>
                 </CardContent>
@@ -713,13 +665,9 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
                 <CardContent className="space-y-5">
                   <div className="flex items-center justify-between gap-4 rounded-md border p-4">
                     <div>
-                      <p className="font-medium">
-                        {isEnglish ? 'Show profile' : 'إظهار الملف الشخصي'}
-                      </p>
+                      <p className="font-medium">{isEnglish ? 'Show profile' : 'إظهار الملف الشخصي'}</p>
                       <p className="text-sm text-muted-foreground">
-                        {isEnglish
-                          ? 'Allow your public profile to be visible.'
-                          : 'السماح بظهور ملفك العام.'}
+                        {isEnglish ? 'Allow your public profile to be visible.' : 'السماح بظهور ملفك العام.'}
                       </p>
                     </div>
                     <Switch
@@ -740,10 +688,7 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
                       onValueChange={(value) =>
                         setSettings((current) => ({
                           ...current,
-                          privacy: {
-                            ...current.privacy,
-                            contact_permission: value as ContactPermission,
-                          },
+                          privacy: { ...current.privacy, contact_permission: value as ContactPermission },
                         }))
                       }
                     >
@@ -758,17 +703,11 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
                         ))}
                       </SelectContent>
                     </Select>
-                    {fieldErrors.contact_permission?.[0] ? (
-                      <p className="text-xs text-destructive">
-                        {fieldErrors.contact_permission[0]}
-                      </p>
-                    ) : null}
+                    <FieldError errors={fieldErrors.contact_permission} isEnglish={isEnglish} />
                   </div>
 
                   <Button disabled={savingSection === 'privacy'} onClick={savePrivacy}>
-                    {savingSection === 'privacy' ? (
-                      <LoaderCircle className="me-2 size-4 animate-spin" />
-                    ) : null}
+                    {savingSection === 'privacy' ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
                     {isEnglish ? 'Save privacy' : 'حفظ الخصوصية'}
                   </Button>
                 </CardContent>
@@ -778,9 +717,7 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
             <TabsContent value="notifications">
               <Card>
                 <CardHeader>
-                  <CardTitle>
-                    {isEnglish ? 'Notification preferences' : 'تفضيلات الإشعارات'}
-                  </CardTitle>
+                  <CardTitle>{isEnglish ? 'Notification preferences' : 'تفضيلات الإشعارات'}</CardTitle>
                   <CardDescription>
                     {isEnglish
                       ? 'Loaded from GET /settings and saved through PUT /settings/notifications.'
@@ -790,9 +727,7 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
                 <CardContent className="space-y-5">
                   <div className="flex items-center justify-between gap-4 rounded-md border p-4">
                     <div>
-                      <p className="font-medium">
-                        {isEnglish ? 'Message notifications' : 'إشعارات الرسائل'}
-                      </p>
+                      <p className="font-medium">{isEnglish ? 'Message notifications' : 'إشعارات الرسائل'}</p>
                       <p className="text-sm text-muted-foreground">
                         {isEnglish
                           ? 'Receive alerts when new messages arrive.'
@@ -804,52 +739,38 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
                       onCheckedChange={(value) =>
                         setSettings((current) => ({
                           ...current,
-                          notifications: {
-                            ...current.notifications,
-                            message_notifications: value,
-                          },
+                          notifications: { ...current.notifications, message_notifications: value },
                         }))
                       }
                     />
                   </div>
 
-                  <Button
-                    disabled={savingSection === 'notifications'}
-                    onClick={saveNotifications}
-                  >
-                    {savingSection === 'notifications' ? (
-                      <LoaderCircle className="me-2 size-4 animate-spin" />
-                    ) : null}
+                  <Button disabled={savingSection === 'notifications'} onClick={saveNotifications}>
+                    {savingSection === 'notifications' ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
                     {isEnglish ? 'Save notifications' : 'حفظ الإشعارات'}
                   </Button>
                 </CardContent>
               </Card>
             </TabsContent>
 
-            <TabsContent value="local-data">
+            <TabsContent value="data">
               <Card className="border-destructive/30">
                 <CardHeader>
-                  <CardTitle className="text-destructive">
-                    {isEnglish ? 'Clear local data' : 'مسح البيانات المحلية'}
-                  </CardTitle>
+                  <CardTitle className="text-destructive">{isEnglish ? 'Clear backend data' : 'حذف بيانات من الباك'}</CardTitle>
                   <CardDescription>
                     {isEnglish
-                      ? 'This backend endpoint currently deletes your notifications.'
-                      : 'هذا endpoint في الباك يقوم حالياً بحذف إشعاراتك.'}
+                      ? 'This backend action currently clears your notifications through DELETE /settings/local-data.'
+                      : 'هذا الإجراء يحذف إشعاراتك من الباك عبر DELETE /settings/local-data.'}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button
-                    variant="destructive"
-                    disabled={savingSection === 'clear'}
-                    onClick={clearLocalData}
-                  >
+                  <Button variant="destructive" disabled={savingSection === 'clear'} onClick={clearBackendData}>
                     {savingSection === 'clear' ? (
                       <LoaderCircle className="me-2 size-4 animate-spin" />
                     ) : (
                       <Trash2 className="me-2 size-4" />
                     )}
-                    {isEnglish ? 'Clear data' : 'مسح البيانات'}
+                    {isEnglish ? 'Clear data' : 'حذف البيانات'}
                   </Button>
                 </CardContent>
               </Card>

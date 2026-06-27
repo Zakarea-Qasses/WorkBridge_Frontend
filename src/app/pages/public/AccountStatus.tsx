@@ -5,7 +5,7 @@ import { useLanguage } from '@/app/providers/LanguageProvider';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { getStoredVerificationEmail } from '@/app/api/tokenStorage';
 
-const COMPANY_VERIFICATION_EMAIL = 'support@workbridge.com';
+const COMPANY_VERIFICATION_EMAIL = 'workbridgeAdmin@gmail.com';
 
 const statusContent = {
   pending: {

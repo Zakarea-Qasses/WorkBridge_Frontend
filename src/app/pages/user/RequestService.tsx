@@ -4,16 +4,33 @@ import { LoaderCircle } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from '@/app/components/ui';
 import { ApiError, getApiErrorMessage, getValidationErrors } from '@/app/api/client';
-import { getService, requestService, type Service } from '@/app/api/endpoints';
+import {
+  getMyServiceRequests,
+  getService,
+  requestService,
+  type Service,
+  type ServiceRequest,
+} from '@/app/api/endpoints';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
+
+function serviceRequestStatusLabel(status: ServiceRequest['status'], isEnglish: boolean) {
+  const labels: Record<ServiceRequest['status'], [string, string]> = {
+    pending: ['pending', 'قيد المراجعة'],
+    accepted: ['accepted', 'مقبول'],
+    rejected: ['rejected', 'مرفوض'],
+  };
+
+  return labels[status]?.[isEnglish ? 0 : 1] || status;
+}
 
 export default function RequestService() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isCompany } = useAuth();
   const { isEnglish, language } = useLanguage();
   const [service, setService] = useState<Service | null>(null);
+  const [existingRequest, setExistingRequest] = useState<ServiceRequest | null>(null);
   const [form, setForm] = useState({ title: '', description: '', references: '', delivery_days: '' });
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [message, setMessage] = useState('');
@@ -28,7 +45,14 @@ export default function RequestService() {
       return;
     }
     let mounted = true;
-    getService(numericId).then((data) => { if (mounted) setService(data); }).catch((error) => {
+    Promise.all([
+      getService(numericId),
+      getMyServiceRequests().catch(() => [] as ServiceRequest[]),
+    ]).then(([data, requests]) => {
+      if (!mounted) return;
+      setService(data);
+      setExistingRequest(requests.find((request) => request.service_id === numericId) || null);
+    }).catch((error) => {
       if (mounted) setMessage(error instanceof ApiError && error.status === 404 ? (isEnglish ? 'Service not found.' : 'الخدمة غير موجودة.') : (isEnglish ? 'Unable to load service.' : 'تعذر تحميل الخدمة.'));
     }).finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
@@ -37,6 +61,14 @@ export default function RequestService() {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!service) return;
+    if (existingRequest) {
+      setMessage(
+        isEnglish
+          ? 'You have already applied for this service.'
+          : 'لقد قمت بالتقديم على هذه الخدمة مسبقاً.',
+      );
+      return;
+    }
     try {
       setSubmitting(true);
       setMessage('');
@@ -47,7 +79,14 @@ export default function RequestService() {
         references: form.references.trim() || null,
         delivery_days: Number(form.delivery_days),
       });
-      navigate('/services/requests', { replace: true });
+      navigate(isCompany ? '/company/service-requests' : '/services/requests', {
+        replace: true,
+        state: {
+          message: isEnglish
+            ? 'Service request sent successfully.'
+            : 'تم إرسال طلب الخدمة بنجاح',
+        },
+      });
     } catch (error) {
       setErrors(getValidationErrors(error));
       setMessage(getApiErrorMessage(error));
@@ -57,13 +96,32 @@ export default function RequestService() {
   };
 
   return (
-    <DashboardLayout>
+    <DashboardLayout userType={isCompany ? 'company' : 'user'}>
       <div className="mx-auto max-w-4xl space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <div><h1 className="text-3xl font-bold">{isEnglish ? 'Request Service' : 'طلب خدمة'}</h1></div>
         {loading ? <div className="h-64 animate-pulse rounded-lg bg-muted" /> : !service ? (
-          <Card><CardContent className="py-12 text-center"><p>{message}</p><Button asChild className="mt-4"><Link to="/services">{isEnglish ? 'Back to services' : 'العودة إلى الخدمات'}</Link></Button></CardContent></Card>
+          <Card><CardContent className="py-12 text-center"><p>{message}</p><Button asChild className="mt-4"><Link to={isCompany ? '/company/services' : '/services'}>{isEnglish ? 'Back to services' : 'العودة إلى الخدمات'}</Link></Button></CardContent></Card>
         ) : service.user_id === user?.id ? (
           <Card><CardContent className="py-12 text-center">{isEnglish ? 'You cannot request your own service.' : 'لا يمكنك طلب خدمتك أنت.'}</CardContent></Card>
+        ) : existingRequest ? (
+          <Card>
+            <CardContent className="space-y-4 py-12 text-center">
+              <p className="text-lg font-semibold">
+                {isEnglish
+                  ? 'You have already applied for this service.'
+                  : 'لقد قمت بالتقديم على هذه الخدمة مسبقاً.'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {isEnglish ? 'Current request status:' : 'حالة الطلب الحالية:'}{' '}
+                {serviceRequestStatusLabel(existingRequest.status, isEnglish)}
+              </p>
+              <Button asChild>
+                <Link to={isCompany ? '/company/services' : '/services/requests'}>
+                  {isEnglish ? 'Back' : 'رجوع'}
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
         ) : (
           <div className="grid gap-6 lg:grid-cols-[1fr_0.7fr]">
             <Card><CardHeader><CardTitle>{isEnglish ? 'Request details' : 'تفاصيل الطلب'}</CardTitle></CardHeader><CardContent>

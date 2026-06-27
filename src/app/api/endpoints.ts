@@ -85,6 +85,12 @@ export interface PersonalDashboardResponse {
   user: WorkBridgeUser;
 }
 
+export interface CompanyDashboardResponse {
+  message: string;
+  role: 'company';
+  user: WorkBridgeUser;
+}
+
 export interface ServiceCategory {
   id: number;
   name: string;
@@ -215,6 +221,15 @@ export interface JobPost {
   city?: (LocationOption & {
     governorate?: LocationOption | null;
   }) | null;
+}
+
+export interface JobPayload {
+  title: string;
+  description: string;
+  location_type?: 'remote' | 'on_site' | 'hybrid' | null;
+  city_id?: number | null;
+  salary?: number | null;
+  status?: 'active' | 'paused' | 'closed';
 }
 
 export interface JobApplication {
@@ -548,6 +563,13 @@ export async function getMyServiceRequests() {
   return unwrapList(response.requests);
 }
 
+export async function getMyServiceRequestsPage(page = 1) {
+  const response = await apiRequest<{
+    requests: PaginatedResponse<ServiceRequest>;
+  }>(`/service-requests/my?page=${page}`);
+  return response.requests;
+}
+
 export async function getReceivedServiceRequests() {
   const response = await apiRequest<{
     requests: ServiceRequest[] | PaginatedResponse<ServiceRequest>;
@@ -618,6 +640,13 @@ export async function getCompanyContracts() {
   return unwrapList(response.contracts);
 }
 
+export async function getCompanyContractsPage(page = 1) {
+  const response = await apiRequest<{ contracts: PaginatedResponse<Contract> }>(
+    `/company/contracts?page=${page}`,
+  );
+  return response.contracts;
+}
+
 export function startContract(id: number) {
   return apiRequest(`/contracts/${id}/start`, { method: 'POST' });
 }
@@ -657,16 +686,38 @@ export async function applyToJob(jobId: string | number) {
   return response.application;
 }
 
-export function createJob(payload: Record<string, unknown>) {
-  return apiRequest('/jobs', { method: 'POST', body: payload });
+export async function createJob(payload: JobPayload) {
+  const response = await apiRequest<{ message: string; job: JobPost }>('/jobs', {
+    method: 'POST',
+    body: payload,
+  });
+  return response.job;
 }
 
-export function updateJob(id: string | number, payload: Record<string, unknown>) {
-  return apiRequest(`/jobs/${id}`, { method: 'PUT', body: payload });
+export async function updateJob(id: string | number, payload: Partial<JobPayload>) {
+  const response = await apiRequest<{ message: string; job: JobPost }>(`/jobs/${id}`, {
+    method: 'PUT',
+    body: payload,
+  });
+  return response.job;
 }
 
 export function deleteJob(id: string | number) {
   return apiRequest(`/jobs/${id}`, { method: 'DELETE' });
+}
+
+export async function pauseJob(id: string | number) {
+  const response = await apiRequest<{ message: string; job: JobPost }>(`/jobs/${id}/pause`, {
+    method: 'POST',
+  });
+  return response.job;
+}
+
+export async function activateJob(id: string | number) {
+  const response = await apiRequest<{ message: string; job: JobPost }>(`/jobs/${id}/activate`, {
+    method: 'POST',
+  });
+  return response.job;
 }
 
 export async function getCompanyJobs() {
@@ -674,6 +725,13 @@ export async function getCompanyJobs() {
     jobs: JobPost[] | PaginatedResponse<JobPost>;
   }>('/company/jobs');
   return unwrapList(response.jobs);
+}
+
+export async function getCompanyJobsPage(page = 1) {
+  const response = await apiRequest<{
+    jobs: PaginatedResponse<JobPost>;
+  }>(`/company/jobs?page=${page}`);
+  return response.jobs;
 }
 
 export async function getJobApplications(jobId: string | number) {
@@ -870,6 +928,10 @@ export function getDashboard<T>(role: WorkBridgeUser['role']) {
 
 export function getPersonalDashboard() {
   return apiRequest<PersonalDashboardResponse>('/dashboard/personal');
+}
+
+export function getCompanyDashboard() {
+  return apiRequest<CompanyDashboardResponse>('/dashboard/company');
 }
 
 export async function getMyWallet() {

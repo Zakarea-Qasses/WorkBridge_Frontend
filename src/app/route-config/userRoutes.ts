@@ -10,7 +10,6 @@ const Applications = lazyPage(() => import('@/app/pages/user/Applications'));
 const CreateService = lazyPage(() => import('@/app/pages/user/CreateService'));
 const MyServices = lazyPage(() => import('@/app/pages/user/MyServices'));
 const ServiceRequests = lazyPage(() => import('@/app/pages/user/ServiceRequests'));
-const RequestService = lazyPage(() => import('@/app/pages/user/RequestService'));
 const Jobs = lazyPage(() => import('@/app/pages/user/Jobs'));
 const Wallet = lazyPage(() => import('@/app/pages/user/Wallet'));
 const TopUpWallet = lazyPage(() => import('@/app/pages/user/TopUpWallet'));
@@ -35,7 +34,6 @@ export const userRoutes = [
   { path: '/services/create', Component: CreateService },
   { path: '/services/my', Component: MyServices },
   { path: '/services/requests', Component: ServiceRequests },
-  { path: '/services/:id/request', Component: RequestService },
   { path: '/jobs', Component: Jobs },
   { path: '/wallet', Component: Wallet },
   { path: '/wallet/top-up', Component: TopUpWallet },

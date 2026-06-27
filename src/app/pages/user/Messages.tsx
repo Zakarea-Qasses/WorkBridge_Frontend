@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { LoaderCircle, MessageSquare, RefreshCw, Search, Send, User } from 'lucide-react';
+import { AlertCircle, LoaderCircle, MessageSquare, RefreshCw, Search, Send, User } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { Badge, Button, Card, CardContent, Input, ScrollArea } from '@/app/components/ui';
 import { getApiErrorMessage } from '@/app/api/client';
@@ -19,16 +19,25 @@ function mergeMessages(current: ConversationMessage[], incoming: ConversationMes
   const byId = new Map(current.map((message) => [message.id, message]));
   incoming.forEach((message) => byId.set(message.id, message));
   return [...byId.values()].sort(
-    (first, second) =>
-      new Date(first.created_at).getTime() - new Date(second.created_at).getTime(),
+    (first, second) => new Date(first.created_at).getTime() - new Date(second.created_at).getTime(),
   );
 }
 
-export function MessagesPage({
-  userType = 'user',
-}: {
-  userType?: 'user' | 'company' | 'admin';
-}) {
+function getOtherUser(conversation: Conversation, currentUserId?: number) {
+  return conversation.user1_id === currentUserId ? conversation.user2 : conversation.user1;
+}
+
+function formatTime(value: string, isEnglish: boolean) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return date.toLocaleTimeString(isEnglish ? 'en' : 'ar', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export function MessagesPage({ userType = 'user' }: { userType?: 'user' | 'company' | 'admin' }) {
   const { user } = useAuth();
   const { isEnglish, language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -49,80 +58,96 @@ export function MessagesPage({
     selectedIdRef.current = selectedId;
   }, [selectedId]);
 
-  const loadConversations = useCallback(async (silent = false) => {
-    if (userType === 'admin') {
-      setLoadingConversations(false);
-      return;
-    }
+  const loadConversations = useCallback(
+    async (silent = false) => {
+      if (userType === 'admin') {
+        setLoadingConversations(false);
+        return;
+      }
 
-    if (!silent) setLoadingConversations(true);
-    try {
-      const items = await getConversations();
-      setConversations(items);
-      const requestedId = Number(searchParams.get('conversation'));
-      const currentId = selectedIdRef.current;
-      setSelectedId(
-        items.find((item) => item.id === requestedId)?.id ||
+      if (!silent) setLoadingConversations(true);
+      try {
+        const items = await getConversations();
+        setConversations(items);
+
+        const requestedId = Number(searchParams.get('conversation'));
+        const currentId = selectedIdRef.current;
+        const nextId =
+          items.find((item) => item.id === requestedId)?.id ||
           items.find((item) => item.id === currentId)?.id ||
           items[0]?.id ||
-          null,
-      );
-      if (!silent) setError('');
-    } catch (requestError) {
-      if (!silent) setError(getApiErrorMessage(requestError));
-    } finally {
-      if (!silent) setLoadingConversations(false);
-    }
-  }, [searchParams, userType]);
+          null;
+
+        setSelectedId(nextId);
+        if (!silent) setError('');
+      } catch (requestError) {
+        if (!silent) {
+          setError(
+            getApiErrorMessage(requestError) ||
+              (isEnglish ? 'Unable to load conversations.' : 'تعذر تحميل المحادثات.'),
+          );
+        }
+      } finally {
+        if (!silent) setLoadingConversations(false);
+      }
+    },
+    [isEnglish, searchParams, userType],
+  );
 
   useEffect(() => {
     void loadConversations();
     if (userType === 'admin') return;
+
     const timer = window.setInterval(() => void loadConversations(true), 10000);
     return () => window.clearInterval(timer);
   }, [loadConversations, userType]);
 
-  const loadLatestMessages = useCallback(async (conversationId: number, silent = false) => {
-    if (!silent) setLoadingMessages(true);
-    try {
-      const firstPage = await getConversationMessagesPage(conversationId, 1);
-      const targetPage = firstPage.last_page;
-      const latest = targetPage === 1
-        ? firstPage
-        : await getConversationMessagesPage(conversationId, targetPage);
-      if (selectedIdRef.current !== conversationId) return;
-      setMessages((current) => silent ? mergeMessages(current, latest.data) : latest.data);
-      setOldestPage(targetPage);
-      await markConversationAsRead(conversationId);
-      setConversations((current) =>
-        current.map((item) =>
-          item.id === conversationId ? { ...item, unread_count: 0 } : item,
-        ),
-      );
-      if (!silent) setError('');
-    } catch (requestError) {
-      if (!silent) setError(getApiErrorMessage(requestError));
-    } finally {
-      if (!silent) setLoadingMessages(false);
-    }
-  }, []);
+  const loadLatestMessages = useCallback(
+    async (conversationId: number, silent = false) => {
+      if (!silent) setLoadingMessages(true);
+      try {
+        const firstPage = await getConversationMessagesPage(conversationId, 1);
+        const targetPage = firstPage.last_page;
+        const latest = targetPage === 1 ? firstPage : await getConversationMessagesPage(conversationId, targetPage);
+
+        if (selectedIdRef.current !== conversationId) return;
+
+        setMessages((current) => (silent ? mergeMessages(current, latest.data) : latest.data));
+        setOldestPage(targetPage);
+        await markConversationAsRead(conversationId);
+        setConversations((current) =>
+          current.map((item) => (item.id === conversationId ? { ...item, unread_count: 0 } : item)),
+        );
+        if (!silent) setError('');
+      } catch (requestError) {
+        if (!silent) {
+          setError(
+            getApiErrorMessage(requestError) ||
+              (isEnglish ? 'Unable to load messages.' : 'تعذر تحميل الرسائل.'),
+          );
+        }
+      } finally {
+        if (!silent) setLoadingMessages(false);
+      }
+    },
+    [isEnglish],
+  );
 
   useEffect(() => {
     if (!selectedId || userType === 'admin') {
       setMessages([]);
       return;
     }
+
     setMessages([]);
     void loadLatestMessages(selectedId);
-    const timer = window.setInterval(
-      () => void loadLatestMessages(selectedId, true),
-      5000,
-    );
+    const timer = window.setInterval(() => void loadLatestMessages(selectedId, true), 5000);
     return () => window.clearInterval(timer);
   }, [loadLatestMessages, selectedId, userType]);
 
   const loadOlderMessages = async () => {
     if (!selectedId || oldestPage <= 1 || loadingOlder) return;
+
     try {
       setLoadingOlder(true);
       const previousPage = oldestPage - 1;
@@ -130,7 +155,10 @@ export function MessagesPage({
       setMessages((current) => mergeMessages(page.data, current));
       setOldestPage(previousPage);
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError));
+      setError(
+        getApiErrorMessage(requestError) ||
+          (isEnglish ? 'Unable to load older messages.' : 'تعذر تحميل الرسائل الأقدم.'),
+      );
     } finally {
       setLoadingOlder(false);
     }
@@ -139,17 +167,13 @@ export function MessagesPage({
   const filteredConversations = useMemo(() => {
     const term = search.trim().toLowerCase();
     return conversations.filter((conversation) => {
-      const other = conversation.user1_id === user?.id ? conversation.user2 : conversation.user1;
+      const other = getOtherUser(conversation, user?.id);
       return !term || other.name.toLowerCase().includes(term);
     });
   }, [conversations, search, user?.id]);
 
   const selectedConversation = conversations.find((item) => item.id === selectedId) || null;
-  const otherUser = selectedConversation
-    ? selectedConversation.user1_id === user?.id
-      ? selectedConversation.user2
-      : selectedConversation.user1
-    : null;
+  const otherUser = selectedConversation ? getOtherUser(selectedConversation, user?.id) : null;
 
   const submitMessage = async (event: FormEvent) => {
     event.preventDefault();
@@ -164,14 +188,15 @@ export function MessagesPage({
       setDraft('');
       setConversations((current) =>
         current.map((item) =>
-          item.id === selectedId
-            ? { ...item, messages: [sent], last_message_at: sent.created_at }
-            : item,
+          item.id === selectedId ? { ...item, messages: [sent], last_message_at: sent.created_at } : item,
         ),
       );
       void loadConversations(true);
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError));
+      setError(
+        getApiErrorMessage(requestError) ||
+          (isEnglish ? 'Unable to send the message.' : 'تعذر إرسال الرسالة.'),
+      );
     } finally {
       setSending(false);
     }
@@ -184,7 +209,7 @@ export function MessagesPage({
           <CardContent className="py-12 text-center text-muted-foreground">
             {isEnglish
               ? 'Admin conversation monitoring is not supported by the backend.'
-              : 'عرض جميع المحادثات للأدمن غير مدعوم من الباك حالياً.'}
+              : 'عرض جميع المحادثات للأدمن غير مدعوم من الباك حاليا.'}
           </CardContent>
         </Card>
       </DashboardLayout>
@@ -195,7 +220,14 @@ export function MessagesPage({
     <DashboardLayout userType={userType}>
       <div className="space-y-4" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold">{isEnglish ? 'Messages' : 'المحادثات'}</h1>
+          <div>
+            <h1 className="text-2xl font-bold">{isEnglish ? 'Messages' : 'المحادثات'}</h1>
+            <p className="text-sm text-muted-foreground">
+              {isEnglish
+                ? 'Follow your active conversations from the backend.'
+                : 'تابع محادثاتك الفعلية المرتبطة بالباك.'}
+            </p>
+          </div>
           <Button
             variant="outline"
             size="icon"
@@ -208,7 +240,10 @@ export function MessagesPage({
 
         {error ? (
           <Card className="border-destructive/30">
-            <CardContent className="py-3 text-sm text-destructive">{error}</CardContent>
+            <CardContent className="flex items-center gap-2 py-3 text-sm text-destructive">
+              <AlertCircle className="size-4" />
+              <span>{error}</span>
+            </CardContent>
           </Card>
         ) : null}
 
@@ -226,43 +261,48 @@ export function MessagesPage({
                   />
                 </div>
               </div>
+
               <ScrollArea className="min-h-0 flex-1">
                 {loadingConversations ? (
-                  <div className="flex justify-center p-8"><LoaderCircle className="size-6 animate-spin" /></div>
+                  <div className="flex justify-center p-8">
+                    <LoaderCircle className="size-6 animate-spin" />
+                  </div>
                 ) : filteredConversations.length === 0 ? (
                   <div className="p-8 text-center text-sm text-muted-foreground">
                     {isEnglish ? 'No conversations yet.' : 'لا توجد محادثات حتى الآن.'}
                   </div>
-                ) : filteredConversations.map((conversation) => {
-                  const other = conversation.user1_id === user?.id ? conversation.user2 : conversation.user1;
-                  const latest = conversation.messages?.[0];
-                  return (
-                    <button
-                      key={conversation.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedId(conversation.id);
-                        setSearchParams({ conversation: String(conversation.id) });
-                      }}
-                      className={`w-full border-b p-4 text-start hover:bg-accent ${
-                        selectedId === conversation.id ? 'bg-accent' : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                          <User className="size-5 text-primary" />
+                ) : (
+                  filteredConversations.map((conversation) => {
+                    const other = getOtherUser(conversation, user?.id);
+                    const latest = conversation.messages?.[0];
+                    return (
+                      <button
+                        key={conversation.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedId(conversation.id);
+                          setSearchParams({ conversation: String(conversation.id) });
+                        }}
+                        className={`w-full border-b p-4 text-start hover:bg-accent ${
+                          selectedId === conversation.id ? 'bg-accent' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                            <User className="size-5 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-medium">{other.name}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {latest?.content || (isEnglish ? 'No messages yet' : 'لا توجد رسائل بعد')}
+                            </p>
+                          </div>
+                          {conversation.unread_count ? <Badge>{conversation.unread_count}</Badge> : null}
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium">{other.name}</p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {latest?.content || (isEnglish ? 'No messages yet' : 'لا توجد رسائل بعد')}
-                          </p>
-                        </div>
-                        {conversation.unread_count ? <Badge>{conversation.unread_count}</Badge> : null}
-                      </div>
-                    </button>
-                  );
-                })}
+                      </button>
+                    );
+                  })
+                )}
               </ScrollArea>
             </div>
 
@@ -274,10 +314,14 @@ export function MessagesPage({
                 </div>
               ) : (
                 <>
-                  <div className="border-b p-4"><h2 className="font-semibold">{otherUser?.name}</h2></div>
+                  <div className="border-b p-4">
+                    <h2 className="font-semibold">{otherUser?.name}</h2>
+                  </div>
                   <ScrollArea className="min-h-0 flex-1 bg-muted/30 p-4">
                     {loadingMessages ? (
-                      <div className="flex justify-center p-8"><LoaderCircle className="size-6 animate-spin" /></div>
+                      <div className="flex justify-center p-8">
+                        <LoaderCircle className="size-6 animate-spin" />
+                      </div>
                     ) : messages.length === 0 ? (
                       <div className="p-8 text-center text-sm text-muted-foreground">
                         {isEnglish ? 'Start the conversation with a message.' : 'ابدأ المحادثة بإرسال رسالة.'}
@@ -297,22 +341,19 @@ export function MessagesPage({
                             </Button>
                           </div>
                         ) : null}
+
                         {messages.map((message) => {
                           const mine = message.sender_id === user?.id;
-                          const date = new Date(message.created_at);
                           return (
                             <div key={message.id} className={`flex ${mine ? 'justify-start' : 'justify-end'}`}>
-                              <div className={`max-w-[80%] rounded-lg px-4 py-2 text-sm ${
-                                mine ? 'bg-primary text-primary-foreground' : 'border bg-white'
-                              }`}>
+                              <div
+                                className={`max-w-[80%] rounded-lg px-4 py-2 text-sm ${
+                                  mine ? 'bg-primary text-primary-foreground' : 'border bg-white'
+                                }`}
+                              >
                                 <p className="whitespace-pre-wrap break-words">{message.content}</p>
                                 <p className="mt-1 text-[10px] opacity-70">
-                                  {Number.isNaN(date.getTime())
-                                    ? ''
-                                    : date.toLocaleTimeString(isEnglish ? 'en' : 'ar', {
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                      })}
+                                  {formatTime(message.created_at, isEnglish)}
                                 </p>
                               </div>
                             </div>

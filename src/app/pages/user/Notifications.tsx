@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  AlertCircle,
   Bell,
   Briefcase,
   Building2,
@@ -27,9 +28,7 @@ import { useLanguage } from '@/app/providers/LanguageProvider';
 export const NOTIFICATION_COUNT_CHANGED_EVENT = 'workbridge:notification-count-changed';
 
 export function notifyUnreadCountChanged(count?: number) {
-  window.dispatchEvent(
-    new CustomEvent(NOTIFICATION_COUNT_CHANGED_EVENT, { detail: { count } }),
-  );
+  window.dispatchEvent(new CustomEvent(NOTIFICATION_COUNT_CHANGED_EVENT, { detail: { count } }));
 }
 
 function notificationTypeLabel(type: string | null, isEnglish: boolean) {
@@ -47,13 +46,19 @@ function notificationTypeLabel(type: string | null, isEnglish: boolean) {
     service_request_rejected: ['Service request rejected', 'رفض طلب خدمة'],
     new_report: ['New report', 'بلاغ جديد'],
     report_decision: ['Report decision', 'قرار بلاغ'],
+    wallet_deposit: ['Wallet deposit', 'إيداع محفظة'],
+    wallet_withdraw: ['Wallet withdrawal', 'سحب محفظة'],
+    contract_created: ['Contract', 'عقد'],
+    contract_updated: ['Contract update', 'تحديث عقد'],
+    message_received: ['Message', 'رسالة'],
   };
+
   return type && labels[type] ? labels[type][isEnglish ? 0 : 1] : isEnglish ? 'Notification' : 'إشعار';
 }
 
 function notificationIcon(type: string | null) {
   if (type?.includes('company')) return <Building2 className="size-5 text-amber-600" />;
-  if (type?.includes('application') || type?.includes('service')) {
+  if (type?.includes('application') || type?.includes('service') || type?.includes('contract')) {
     return <Briefcase className="size-5 text-primary" />;
   }
   if (type?.includes('account') || type?.includes('report')) {
@@ -68,17 +73,14 @@ function notificationIcon(type: string | null) {
 function formatDate(value: string, isEnglish: boolean) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return isEnglish ? 'Date unavailable' : 'التاريخ غير متاح';
+
   return new Intl.DateTimeFormat(isEnglish ? 'en' : 'ar', {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date);
 }
 
-export function NotificationsPage({
-  userType = 'user',
-}: {
-  userType?: 'user' | 'company' | 'admin';
-}) {
+export function NotificationsPage({ userType = 'user' }: { userType?: 'user' | 'company' | 'admin' }) {
   const { user } = useAuth();
   const { isEnglish, language } = useLanguage();
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
@@ -93,6 +95,7 @@ export function NotificationsPage({
 
   const load = useCallback(async () => {
     if (!user) return;
+
     setLoading(true);
     setError('');
     try {
@@ -106,11 +109,14 @@ export function NotificationsPage({
       notifyUnreadCountChanged(count);
     } catch (requestError) {
       setNotifications([]);
-      setError(getApiErrorMessage(requestError));
+      setError(
+        getApiErrorMessage(requestError) ||
+          (isEnglish ? 'Unable to load notifications.' : 'تعذر تحميل الإشعارات.'),
+      );
     } finally {
       setLoading(false);
     }
-  }, [page, user]);
+  }, [isEnglish, page, user]);
 
   useEffect(() => {
     setNotifications([]);
@@ -130,18 +136,20 @@ export function NotificationsPage({
 
   const markOne = async (notification: UserNotification) => {
     if (notification.read_at || busyId === notification.id) return;
+
     try {
       setBusyId(notification.id);
       setError('');
       setSuccess('');
       const updated = await markNotificationAsRead(notification.id);
-      setNotifications((current) =>
-        current.map((item) => (item.id === notification.id ? updated : item)),
-      );
+      setNotifications((current) => current.map((item) => (item.id === notification.id ? updated : item)));
       await refreshCount();
-      setSuccess(isEnglish ? 'Notification marked as read.' : 'تم تحديد الإشعار كمقروء');
+      setSuccess(isEnglish ? 'Notification marked as read.' : 'تم تحديد الإشعار كمقروء.');
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError));
+      setError(
+        getApiErrorMessage(requestError) ||
+          (isEnglish ? 'Unable to mark notification as read.' : 'تعذر تحديد الإشعار كمقروء.'),
+      );
     } finally {
       setBusyId(null);
     }
@@ -149,6 +157,7 @@ export function NotificationsPage({
 
   const markAll = async () => {
     if (!unreadCount || markingAll) return;
+
     try {
       setMarkingAll(true);
       setError('');
@@ -163,13 +172,12 @@ export function NotificationsPage({
       );
       setUnreadCount(0);
       notifyUnreadCountChanged(0);
-      setSuccess(
-        isEnglish
-          ? 'All notifications marked as read.'
-          : 'تم تحديد جميع الإشعارات كمقروءة',
-      );
+      setSuccess(isEnglish ? 'All notifications marked as read.' : 'تم تحديد جميع الإشعارات كمقروءة.');
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError));
+      setError(
+        getApiErrorMessage(requestError) ||
+          (isEnglish ? 'Unable to mark all notifications as read.' : 'تعذر تحديد جميع الإشعارات كمقروءة.'),
+      );
     } finally {
       setMarkingAll(false);
     }
@@ -178,11 +186,11 @@ export function NotificationsPage({
   const remove = async (notification: UserNotification) => {
     if (
       !window.confirm(
-        isEnglish
-          ? 'Are you sure you want to delete this notification?'
-          : 'هل أنت متأكد من حذف هذا الإشعار؟',
+        isEnglish ? 'Are you sure you want to delete this notification?' : 'هل أنت متأكد من حذف هذا الإشعار؟',
       )
-    ) return;
+    ) {
+      return;
+    }
 
     try {
       setBusyId(notification.id);
@@ -192,10 +200,13 @@ export function NotificationsPage({
       const remaining = notifications.filter((item) => item.id !== notification.id);
       setNotifications(remaining);
       await refreshCount();
-      setSuccess(isEnglish ? 'Notification deleted.' : 'تم حذف الإشعار');
+      setSuccess(isEnglish ? 'Notification deleted.' : 'تم حذف الإشعار.');
       if (!remaining.length && page > 1) setPage((current) => current - 1);
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError));
+      setError(
+        getApiErrorMessage(requestError) ||
+          (isEnglish ? 'Unable to delete notification.' : 'تعذر حذف الإشعار.'),
+      );
     } finally {
       setBusyId(null);
     }
@@ -225,9 +236,13 @@ export function NotificationsPage({
 
         {error ? (
           <Card className="border-destructive/30">
-            <CardContent className="py-3 text-sm text-destructive">{error}</CardContent>
+            <CardContent className="flex items-center gap-2 py-3 text-sm text-destructive">
+              <AlertCircle className="size-4" />
+              <span>{error}</span>
+            </CardContent>
           </Card>
         ) : null}
+
         {success ? (
           <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
             <CheckCircle2 className="size-4" />
@@ -245,7 +260,7 @@ export function NotificationsPage({
           <Card>
             <CardContent className="flex min-h-56 flex-col items-center justify-center gap-3 text-center text-muted-foreground">
               <Bell className="size-10" />
-              <p>{isEnglish ? 'No notifications currently.' : 'لا توجد إشعارات حالياً'}</p>
+              <p>{isEnglish ? 'No notifications currently.' : 'لا توجد إشعارات حاليا.'}</p>
             </CardContent>
           </Card>
         ) : (
@@ -253,22 +268,15 @@ export function NotificationsPage({
             {notifications.map((notification) => {
               const busy = busyId === notification.id;
               return (
-                <Card
-                  key={notification.id}
-                  className={!notification.read_at ? 'border-primary/30 bg-primary/5' : ''}
-                >
+                <Card key={notification.id} className={!notification.read_at ? 'border-primary/30 bg-primary/5' : ''}>
                   <CardContent className="flex flex-wrap items-start justify-between gap-4 pt-6">
                     <div className="flex min-w-0 flex-1 items-start gap-3">
                       <div className="mt-1">{notificationIcon(notification.type)}</div>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <h2 className="font-semibold">{notification.title}</h2>
-                          <Badge variant="outline">
-                            {notificationTypeLabel(notification.type, isEnglish)}
-                          </Badge>
-                          {!notification.read_at ? (
-                            <Badge>{isEnglish ? 'New' : 'جديد'}</Badge>
-                          ) : null}
+                          <Badge variant="outline">{notificationTypeLabel(notification.type, isEnglish)}</Badge>
+                          {!notification.read_at ? <Badge>{isEnglish ? 'New' : 'جديد'}</Badge> : null}
                         </div>
                         <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
                           {notification.message}
@@ -280,12 +288,7 @@ export function NotificationsPage({
                     </div>
                     <div className="flex gap-2">
                       {!notification.read_at ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={busy}
-                          onClick={() => void markOne(notification)}
-                        >
+                        <Button variant="outline" size="sm" disabled={busy} onClick={() => void markOne(notification)}>
                           {busy ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
                           {isEnglish ? 'Mark read' : 'تحديد كمقروء'}
                         </Button>

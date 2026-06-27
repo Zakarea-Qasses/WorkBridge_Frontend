@@ -4,6 +4,9 @@ const CompanyDashboard = lazyPage(() => import('@/app/pages/company/CompanyDashb
 const CompanyProfile = lazyPage(() => import('@/app/pages/company/CompanyProfile'));
 const CompanyJobs = lazyPage(() => import('@/app/pages/company/CompanyJobs'));
 const CompanyServices = lazyPage(() => import('@/app/pages/company/CompanyServices'));
+const CompanyServiceRequests = lazyPage(
+  () => import('@/app/pages/company/CompanyServiceRequests'),
+);
 const CompanyContracts = lazyPage(() => import('@/app/pages/company/CompanyContracts'));
 const CompanyApplicants = lazyPage(() => import('@/app/pages/company/CompanyApplicants'));
 const CompanyWallet = lazyPage(() => import('@/app/pages/company/CompanyWallet'));
@@ -21,6 +24,7 @@ export const companyRoutes = [
   { path: '/company/profile', Component: CompanyProfile },
   { path: '/company/jobs', Component: CompanyJobs },
   { path: '/company/services', Component: CompanyServices },
+  { path: '/company/service-requests', Component: CompanyServiceRequests },
   { path: '/company/contracts', Component: CompanyContracts },
   { path: '/company/applicants', Component: CompanyApplicants },
   { path: '/company/wallet', Component: CompanyWallet },

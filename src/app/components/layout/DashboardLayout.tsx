@@ -168,6 +168,7 @@ export default function DashboardLayout({
       { icon: Building2, label: isEnglish ? 'Company Profile' : 'ملف الشركة', path: '/company/profile' },
       { icon: Briefcase, label: isEnglish ? 'Manage Jobs' : 'إدارة الوظائف', path: '/company/jobs' },
       { icon: Search, label: isEnglish ? 'Browse Services' : 'تصفح الخدمات', path: '/company/services' },
+      { icon: FileText, label: isEnglish ? 'Service Requests' : 'طلبات الخدمات', path: '/company/service-requests' },
       { icon: FileText, label: isEnglish ? 'Company Contracts' : 'عقود الشركة', path: '/company/contracts' },
       { icon: User, label: isEnglish ? 'Applicants' : 'المتقدمون', path: '/company/applicants' },
       { icon: Wallet, label: isEnglish ? 'Company Wallet' : 'محفظة الشركة', path: '/company/wallet' },

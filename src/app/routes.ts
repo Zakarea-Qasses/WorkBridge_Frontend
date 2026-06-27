@@ -3,6 +3,7 @@ import type { RouteObject } from 'react-router';
 import { createBrowserRouter } from 'react-router';
 import { NotFound, RouteError } from '@/app/pages/public';
 import { adminRoutes, authRoutes, companyRoutes, userRoutes } from '@/app/route-config';
+import { lazyPage } from '@/app/route-config/lazyPage';
 import { GuestRoute, ProtectedRoute } from '@/app/route-config/ProtectedRoute';
 import {
   AccountBlocked,
@@ -11,6 +12,8 @@ import {
   CompanyPendingVerification,
 } from '@/app/pages/public/AccountStatus';
 import type { WorkBridgeUser } from '@/app/api/endpoints';
+
+const RequestService = lazyPage(() => import('@/app/pages/user/RequestService'));
 
 function withErrorElement(routes: RouteObject[]) {
   return routes.map((route) => ({
@@ -69,6 +72,12 @@ export const router = createBrowserRouter([
       element: createElement(CompanyPendingVerification),
     },
   ]),
+  ...withErrorElement(
+    protect(
+      [{ path: '/services/:id/request', Component: RequestService }],
+      ['personal', 'company'],
+    ),
+  ),
   ...withErrorElement(protect(userRoutes, ['personal'])),
   ...withErrorElement(protect(companyRoutes, ['company'])),
   ...withErrorElement(protect(adminRoutes, ['admin'])),
