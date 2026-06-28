@@ -14,6 +14,7 @@ import {
 import type { WorkBridgeUser } from '@/app/api/endpoints';
 
 const RequestService = lazyPage(() => import('@/app/pages/user/RequestService'));
+const PublicProfile = lazyPage(() => import('@/app/pages/public/PublicProfile'));
 
 function withErrorElement(routes: RouteObject[]) {
   return routes.map((route) => ({
@@ -54,6 +55,7 @@ function guestOnly(routes: RouteObject[]) {
 
 export const router = createBrowserRouter([
   ...withErrorElement(guestOnly(authRoutes)),
+  ...withErrorElement([{ path: '/freelancers/:id', Component: PublicProfile }]),
   ...withErrorElement([
     {
       path: '/account-pending',

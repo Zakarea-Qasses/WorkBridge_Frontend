@@ -4,6 +4,7 @@ import {
   Building2,
   CheckCircle2,
   ExternalLink,
+  ImagePlus,
   Loader2,
   MapPin,
   Phone,
@@ -144,6 +145,8 @@ export default function CompanyProfile() {
   const [governorates, setGovernorates] = useState<LocationOption[]>([]);
   const [cities, setCities] = useState<LocationOption[]>([]);
   const [draft, setDraft] = useState<CompanyDraft | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [locationsLoading, setLocationsLoading] = useState(false);
@@ -199,12 +202,15 @@ export default function CompanyProfile() {
       selectCity: isEnglish ? 'Select city' : 'اختر المدينة',
       clearSelection: isEnglish ? 'Not selected' : 'غير محدد',
       openWebsite: isEnglish ? 'Open website' : 'فتح الموقع',
+      logo: isEnglish ? 'Company logo' : 'شعار الشركة',
+      logoChoose: isEnglish ? 'Choose logo' : 'اختيار شعار',
+      logoHint: isEnglish
+        ? 'Upload a PNG, JPG, or WebP image. The logo is saved with the company profile.'
+        : 'ارفع صورة PNG أو JPG أو WebP. يتم حفظ الشعار مع ملف الشركة.',
+      logoPreview: isEnglish ? 'Logo preview' : 'معاينة الشعار',
       readOnlyVerification: isEnglish
         ? 'Verification status is managed by the admin.'
         : 'حالة التوثيق تتم إدارتها من قبل الأدمن.',
-      logoUnsupported: isEnglish
-        ? 'Company logo updates need file upload support from the backend.'
-        : 'تحديث شعار الشركة يحتاج إلى دعم رفع الملفات من الخادم.',
     }),
     [isEnglish],
   );
@@ -251,6 +257,7 @@ export default function CompanyProfile() {
     const requestId = ++requestIdRef.current;
     setCompany(null);
     setDraft(null);
+    setLogoFile(null);
     setCities([]);
     setFieldErrors({});
     setIsEditing(false);
@@ -335,9 +342,25 @@ export default function CompanyProfile() {
   }, [draft?.governorate_id]);
 
   const websiteUrl = useMemo(() => normalizeWebsite(company?.website || null), [company?.website]);
+  const currentLogoUrl = normalizeAssetUrl(company?.logo || null);
+  const displayedLogoUrl = logoPreviewUrl || currentLogoUrl;
 
   const skills = company?.skills || [];
   const locationText = company ? getLocationText(company, labels.noLocation) : labels.noLocation;
+
+  useEffect(() => {
+    if (!logoFile) {
+      setLogoPreviewUrl(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(logoFile);
+    setLogoPreviewUrl(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [logoFile]);
 
   const handleDraftChange = (key: keyof CompanyDraft, value: string) => {
     setDraft((current) => (current ? { ...current, [key]: value } : current));
@@ -379,6 +402,7 @@ export default function CompanyProfile() {
 
   const handleCancel = () => {
     setDraft(company ? createDraft(company) : null);
+    setLogoFile(null);
     setFieldErrors({});
     setStatus(null);
     setIsEditing(false);
@@ -408,6 +432,7 @@ export default function CompanyProfile() {
           .split(',')
           .map((skill) => skill.trim())
           .filter(Boolean),
+        logo: logoFile,
       });
 
       const freshCompany = await getCompany();
@@ -418,6 +443,7 @@ export default function CompanyProfile() {
 
       setCompany(freshCompany);
       setDraft(createDraft(freshCompany));
+      setLogoFile(null);
       setIsEditing(false);
       setStatus({ type: 'success', message: labels.saved });
       await refreshUser();
@@ -498,8 +524,6 @@ export default function CompanyProfile() {
     return <Navigate to={getDashboardPathForUser(user)} replace />;
   }
 
-  const logoUrl = normalizeAssetUrl(company?.logo || null);
-
   return (
     <DashboardLayout userType="company">
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
@@ -567,9 +591,9 @@ export default function CompanyProfile() {
               <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary">
-                    {logoUrl ? (
+                    {displayedLogoUrl ? (
                       <img
-                        src={logoUrl}
+                        src={displayedLogoUrl}
                         alt={company.company_name}
                         className="h-full w-full object-cover"
                       />
@@ -580,7 +604,6 @@ export default function CompanyProfile() {
                   <div>
                     <CardTitle>{company.company_name}</CardTitle>
                     <CardDescription>{company.website || labels.noWebsite}</CardDescription>
-                    <p className="mt-1 text-xs text-muted-foreground">{labels.logoUnsupported}</p>
                   </div>
                 </div>
 
@@ -612,6 +635,50 @@ export default function CompanyProfile() {
                 {isEditing ? (
                   <>
                     <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-3 md:col-span-2">
+                        <label className="text-sm font-medium">{labels.logo}</label>
+                        <div className="flex flex-wrap items-center gap-4 rounded-lg border border-dashed border-border p-4">
+                          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary">
+                            {displayedLogoUrl ? (
+                              <img
+                                src={displayedLogoUrl}
+                                alt={labels.logoPreview}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <Building2 className="h-9 w-9" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <Input
+                              type="file"
+                              accept="image/png,image/jpeg,image/jpg,image/webp"
+                              onChange={(event) => {
+                                const file = event.target.files?.[0] || null;
+                                setLogoFile(file);
+                                setFieldErrors((current) => {
+                                  if (!current.logo) {
+                                    return current;
+                                  }
+
+                                  const next = { ...current };
+                                  delete next.logo;
+                                  return next;
+                                });
+                              }}
+                            />
+                            <p className="text-xs text-muted-foreground">{labels.logoHint}</p>
+                            {logoFile ? (
+                              <p className="text-xs text-primary">
+                                <ImagePlus className="me-1 inline h-3.5 w-3.5" />
+                                {logoFile.name}
+                              </p>
+                            ) : null}
+                            {renderFieldError('logo')}
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="space-y-2 md:col-span-2">
                         <label className="text-sm font-medium">{labels.companyName}</label>
                         <Input

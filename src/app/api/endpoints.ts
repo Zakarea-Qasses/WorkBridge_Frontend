@@ -6,7 +6,7 @@ export interface WorkBridgeUser {
   email: string;
   role: 'personal' | 'company' | 'admin' | string;
   email_verified_at?: string | null;
-  status?: 'pending_review' | 'under_review' | 'active' | 'blocked';
+  status?: 'pending_review' | 'under_review' | 'active' | 'blocked' | 'inactive' | 'unactive' | string;
   company?: {
     id: number;
     company_name?: string;
@@ -110,6 +110,7 @@ export interface Service {
   description: string | null;
   price: number | string;
   delivery_days: number;
+  status?: 'active' | 'paused' | 'closed' | string;
   created_at: string;
   updated_at: string;
   user?: ServiceOwner;
@@ -322,6 +323,7 @@ export interface UpdateCompanyProfilePayload {
   description: string | null;
   phone: string | null;
   skills: string[];
+  logo?: File | null;
 }
 
 export type ContactPermission = 'all' | 'verified' | 'none';
@@ -375,6 +377,27 @@ export interface Report {
   created_at: string;
   updated_at: string;
   reporter?: ReportUser | null;
+  target_summary?: {
+    id: number;
+    type: string;
+    title?: string | null;
+    owner_name?: string | null;
+    email?: string | null;
+    status?: string | null;
+    amount?: number | string | null;
+  } | null;
+  contract_summary?: {
+    id: number;
+    amount?: number | string | null;
+    commission_amount?: number | string | null;
+    freelancer_amount?: number | string | null;
+    status?: string | null;
+    client_name?: string | null;
+    client_email?: string | null;
+    freelancer_name?: string | null;
+    freelancer_email?: string | null;
+    subject_title?: string | null;
+  } | null;
 }
 
 export type ProjectStatus = 'active' | 'paused' | 'closed' | string;
@@ -827,15 +850,65 @@ export function getUserReviews(userId: string | number) {
   return apiRequest<UserReviewsResponse>(`/users/${userId}/reviews`);
 }
 
+export async function getPublicProfile(userId: string | number) {
+  const response = await apiRequest<
+    PersonalProfileResponse & {
+      reviews?: ProfileReview[];
+    }
+  >(`/users/${userId}/profile`);
+
+  return {
+    ...response,
+    reviews: response.reviews || [],
+  };
+}
+
 export async function getCompany<T = CompanyProfile>() {
   const response = await apiRequest<{ company: T }>('/company');
   return response.company;
 }
 
 export async function updateCompany(payload: UpdateCompanyProfilePayload) {
+  if (payload.logo instanceof File) {
+    const formData = new FormData();
+    formData.append('_method', 'PUT');
+    formData.append('company_name', payload.company_name);
+    formData.append('website', payload.website || '');
+    formData.append('location', payload.location || '');
+    formData.append(
+      'governorate_id',
+      payload.governorate_id === null || payload.governorate_id === undefined
+        ? ''
+        : String(payload.governorate_id),
+    );
+    formData.append(
+      'city_id',
+      payload.city_id === null || payload.city_id === undefined ? '' : String(payload.city_id),
+    );
+    formData.append('description', payload.description || '');
+    formData.append('phone', payload.phone || '');
+    payload.skills.forEach((skill) => formData.append('skills[]', skill));
+    formData.append('logo', payload.logo);
+
+    const response = await apiRequest<{ message: string; company: CompanyProfile }>('/company', {
+      method: 'POST',
+      body: formData,
+    });
+    return response.company;
+  }
+
   const response = await apiRequest<{ message: string; company: CompanyProfile }>('/company', {
     method: 'PUT',
-    body: payload,
+    body: {
+      company_name: payload.company_name,
+      website: payload.website,
+      location: payload.location,
+      governorate_id: payload.governorate_id,
+      city_id: payload.city_id,
+      description: payload.description,
+      phone: payload.phone,
+      skills: payload.skills,
+    },
   });
   return response.company;
 }
@@ -1042,4 +1115,94 @@ export function verifyAdminCompany(id: string | number) {
 
 export function unverifyAdminCompany(id: string | number) {
   return apiRequest(`/admin/companies/${id}/unverify`, { method: 'POST' });
+}
+
+export function requestAdminCompanyDocuments(
+  id: string | number,
+  payload: { title: string; message: string },
+) {
+  return apiRequest(`/admin/companies/${id}/request-document`, {
+    method: 'POST',
+    body: {
+      document_name: payload.title,
+      reason: payload.message,
+    },
+  });
+}
+
+export type AdminContentType = 'projects' | 'services' | 'jobs';
+export type AdminContentStatus = 'active' | 'paused' | 'closed';
+
+export interface AdminContentQuery {
+  page?: number;
+  search?: string;
+  status?: AdminContentStatus;
+}
+
+function buildAdminContentQuery(params?: AdminContentQuery) {
+  const query = new URLSearchParams();
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      query.set(key, String(value));
+    }
+  });
+
+  return query.toString();
+}
+
+export async function getAdminContentProjects(params?: AdminContentQuery) {
+  const query = buildAdminContentQuery(params);
+  const response = await apiRequest<{ projects: PaginatedResponse<UserProject> }>(
+    `/admin/content/projects${query ? `?${query}` : ''}`,
+  );
+  return response.projects;
+}
+
+export async function getAdminContentServices(params?: AdminContentQuery) {
+  const query = buildAdminContentQuery(params);
+  const response = await apiRequest<{ services: PaginatedResponse<Service> }>(
+    `/admin/content/services${query ? `?${query}` : ''}`,
+  );
+  return response.services;
+}
+
+export async function getAdminContentJobs(params?: AdminContentQuery) {
+  const query = buildAdminContentQuery(params);
+  const response = await apiRequest<{ jobs: PaginatedResponse<JobPost> }>(
+    `/admin/content/jobs${query ? `?${query}` : ''}`,
+  );
+  return response.jobs;
+}
+
+export function updateAdminProjectStatus(id: string | number, status: AdminContentStatus) {
+  return apiRequest(`/admin/content/projects/${id}/status`, {
+    method: 'PUT',
+    body: { status },
+  });
+}
+
+export function updateAdminServiceStatus(id: string | number, status: AdminContentStatus) {
+  return apiRequest(`/admin/content/services/${id}/status`, {
+    method: 'PUT',
+    body: { status },
+  });
+}
+
+export function updateAdminJobStatus(id: string | number, status: AdminContentStatus) {
+  return apiRequest(`/admin/content/jobs/${id}/status`, {
+    method: 'PUT',
+    body: { status },
+  });
+}
+
+export function deleteAdminContentProject(id: string | number) {
+  return apiRequest(`/admin/content/projects/${id}`, { method: 'DELETE' });
+}
+
+export function deleteAdminContentService(id: string | number) {
+  return apiRequest(`/admin/content/services/${id}`, { method: 'DELETE' });
+}
+
+export function deleteAdminContentJob(id: string | number) {
+  return apiRequest(`/admin/content/jobs/${id}`, { method: 'DELETE' });
 }

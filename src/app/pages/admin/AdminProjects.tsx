@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { FileText, ShieldAlert } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { BriefcaseBusiness, FileText, LoaderCircle, RefreshCw, Search, Trash2 } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import {
@@ -10,403 +10,504 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/app/components/ui';
-import { getDisplayStatusLabel, getDisplayTypeLabel, getStatusClasses } from '@/app/data';
+import { getApiErrorMessage } from '@/app/api/client';
 import {
-  AdminProjectRecord,
-  deleteAdminProject,
-  getAdminProjectRecords,
-  processAdminProject,
-  resetAdminProjectRecords,
-} from '@/app/storage';
+  AdminContentStatus,
+  AdminContentType,
+  JobPost,
+  PaginatedResponse,
+  Service,
+  UserProject,
+  deleteAdminContentJob,
+  deleteAdminContentProject,
+  deleteAdminContentService,
+  getAdminContentJobs,
+  getAdminContentProjects,
+  getAdminContentServices,
+  updateAdminJobStatus,
+  updateAdminProjectStatus,
+  updateAdminServiceStatus,
+} from '@/app/api/endpoints';
 
-type ProcessedAdminProject = AdminProjectRecord & {
-  processedAt: string;
-  actionLabel: string;
-};
+type StatusFilter = 'all' | AdminContentStatus;
+type Feedback = { type: 'success' | 'error'; message: string } | null;
+type AdminContentItem = UserProject | Service | JobPost;
 
-function getAdminProjectTypeLabel(type: string, isEnglish: boolean) {
-  if (!isEnglish) {
-    return type;
+const contentTypes: Array<{
+  value: AdminContentType;
+  labelAr: string;
+  labelEn: string;
+}> = [
+  { value: 'projects', labelAr: 'المشاريع', labelEn: 'Projects' },
+  { value: 'services', labelAr: 'الخدمات', labelEn: 'Services' },
+  { value: 'jobs', labelAr: 'الوظائف', labelEn: 'Jobs' },
+];
+
+const statusOptions: Array<{ value: AdminContentStatus; labelAr: string; labelEn: string }> = [
+  { value: 'active', labelAr: 'نشط', labelEn: 'Active' },
+  { value: 'paused', labelAr: 'متوقف مؤقتا', labelEn: 'Paused' },
+  { value: 'closed', labelAr: 'مغلق', labelEn: 'Closed' },
+];
+
+function getStatusLabel(status: string | undefined, isEnglish: boolean) {
+  if (status === 'paused') {
+    return isEnglish ? 'Paused' : 'متوقف مؤقتا';
   }
 
-  switch (type.trim()) {
-    case 'مشروع حر':
-      return 'Freelance project';
-    case 'إعلان وظيفي':
-      return 'Job posting';
-    case 'خدمة مستقلة':
-      return 'Freelance service';
-    default:
-      return getDisplayTypeLabel(type, true);
+  if (status === 'closed') {
+    return isEnglish ? 'Closed' : 'مغلق';
   }
+
+  return isEnglish ? 'Active' : 'نشط';
 }
 
-function getAdminProjectActionLabel(actionLabel: string, isEnglish: boolean) {
-  if (!isEnglish) {
-    return actionLabel;
+function getStatusClass(status: string | undefined) {
+  if (status === 'paused') {
+    return 'bg-amber-100 text-amber-700 border-amber-200';
   }
 
-  switch (actionLabel.trim()) {
-    case 'اعتماد أو إغلاق':
-      return 'Approved or closed';
-    default:
-      return actionLabel;
+  if (status === 'closed') {
+    return 'bg-slate-100 text-slate-700 border-slate-200';
   }
+
+  return 'bg-green-100 text-green-700 border-green-200';
 }
 
-function getAdminProjectOwnerLabel(owner: string, isEnglish: boolean) {
-  if (!isEnglish) {
-    return owner;
+function formatDate(value: string | undefined, isEnglish: boolean) {
+  if (!value) {
+    return isEnglish ? 'Not available' : 'غير متوفر';
   }
 
-  const ownerMap: Record<string, string> = {
-    'شركة ألفا': 'Alpha Company',
-    'شركة التقنية المتقدمة': 'Advanced Tech Company',
-    'خالد سعيد': 'Khaled Saeed',
-    'مؤسسة النجاح': 'Al Najah Foundation',
-    'دار الأناقة': 'Elegance House',
-  };
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
 
-  return ownerMap[owner.trim()] ?? owner;
+  return new Intl.DateTimeFormat(isEnglish ? 'en' : 'ar', { dateStyle: 'medium' }).format(date);
 }
 
-function getAdminProjectProcessedDateLabel(processedAt: string, isEnglish: boolean) {
-  if (!isEnglish) {
-    return processedAt;
+function formatAmount(value: number | string | null | undefined, isEnglish: boolean) {
+  if (value === null || value === undefined || value === '') {
+    return isEnglish ? 'Not available' : 'غير متوفر';
   }
 
-  const normalized = processedAt.trim();
-  const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-  const westernDigits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-
-  let converted = normalized;
-  arabicDigits.forEach((digit, index) => {
-    converted = converted.replaceAll(digit, westernDigits[index]);
-  });
-
-  const parts = converted.split(/[\/]/).map((part) => part.trim()).filter(Boolean);
-  if (parts.length === 3) {
-    const [day, month, year] = parts;
-    return `${year}/${month.padStart(2, '0')}/${day.padStart(2, '0')}`;
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) {
+    return String(value);
   }
 
-  return converted;
+  return new Intl.NumberFormat(isEnglish ? 'en' : 'ar', {
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+function getOwnerName(item: AdminContentItem, type: AdminContentType) {
+  if (type === 'jobs') {
+    const job = item as JobPost;
+    return job.company?.company_name || job.company?.user?.name || job.company?.user?.email || '';
+  }
+
+  return (item as UserProject | Service).user?.name || (item as UserProject | Service).user?.email || '';
+}
+
+function getCategoryName(item: AdminContentItem, type: AdminContentType) {
+  if (type === 'jobs') {
+    const job = item as JobPost;
+    return job.city?.name || job.location_type || '';
+  }
+
+  return (item as UserProject | Service).category?.name || '';
+}
+
+function getContentValue(item: AdminContentItem, type: AdminContentType, isEnglish: boolean) {
+  if (type === 'projects') {
+    return `${isEnglish ? 'Budget' : 'الميزانية'}: ${formatAmount((item as UserProject).budget, isEnglish)}`;
+  }
+
+  if (type === 'services') {
+    return `${isEnglish ? 'Price' : 'السعر'}: ${formatAmount((item as Service).price, isEnglish)}`;
+  }
+
+  return `${isEnglish ? 'Salary' : 'الراتب'}: ${formatAmount((item as JobPost).salary, isEnglish)}`;
+}
+
+function getContentDescription(item: AdminContentItem) {
+  return item.description || '';
 }
 
 export default function AdminProjects() {
   const { language, isEnglish } = useLanguage();
-  const [items, setItems] = useState<AdminProjectRecord[]>(() => getAdminProjectRecords());
-  const [selectedItemId, setSelectedItemId] = useState<number>(
-    getAdminProjectRecords().find((item) => !item.processedAt)?.id ?? 0,
-  );
-  const [feedback, setFeedback] = useState(
-    isEnglish
-      ? 'Review reported or pending items and take the appropriate administrative action.'
-      : 'يمكنك مراجعة العناصر المبلغ عنها أو التي تنتظر اعتمادًا واتخاذ الإجراء المناسب.',
-  );
+  const [activeType, setActiveType] = useState<AdminContentType>('projects');
+  const [items, setItems] = useState<AdminContentItem[]>([]);
+  const [pagination, setPagination] = useState<PaginatedResponse<AdminContentItem> | null>(null);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [actingKey, setActingKey] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Feedback>(null);
 
-  const openItems = useMemo(() => items.filter((item) => !item.processedAt), [items]);
-  const processedItems = useMemo(
-    () =>
-      items.filter(
-        (item): item is ProcessedAdminProject => Boolean(item.processedAt && item.actionLabel),
-      ),
-    [items],
-  );
+  const activeLabel = useMemo(() => {
+    const type = contentTypes.find((item) => item.value === activeType);
+    return isEnglish ? type?.labelEn : type?.labelAr;
+  }, [activeType, isEnglish]);
 
-  const selectedItem = openItems.find((item) => item.id === selectedItemId) ?? openItems[0] ?? null;
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 350);
 
-  const handleProcessItem = (item: AdminProjectRecord, actionLabel: string) => {
-    const nextItems = processAdminProject(item.id, actionLabel);
-    const nextOpenItems = nextItems.filter((currentItem) => !currentItem.processedAt);
+    return () => window.clearTimeout(timeout);
+  }, [search]);
 
-    setItems(nextItems);
-    setSelectedItemId(nextOpenItems[0]?.id ?? 0);
-    setFeedback(
-      isEnglish
-        ? `"${item.title}" was processed and moved to the handled section.`
-        : `تم ${actionLabel} "${item.title}" ونقله إلى قسم تمت معالجته.`,
-    );
+  const loadContent = async () => {
+    setLoading(true);
+    setFeedback(null);
+
+    try {
+      const params = {
+        page,
+        search: debouncedSearch || undefined,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+      };
+      const response =
+        activeType === 'projects'
+          ? await getAdminContentProjects(params)
+          : activeType === 'services'
+            ? await getAdminContentServices(params)
+            : await getAdminContentJobs(params);
+
+      setPagination(response as PaginatedResponse<AdminContentItem>);
+      setItems(response.data as AdminContentItem[]);
+    } catch (error) {
+      setItems([]);
+      setPagination(null);
+      setFeedback({ type: 'error', message: getApiErrorMessage(error) });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeletePost = (item: AdminProjectRecord) => {
-    const nextItems = deleteAdminProject(item.id);
-    const nextOpenItems = nextItems.filter((currentItem) => !currentItem.processedAt);
+  useEffect(() => {
+    loadContent();
+  }, [activeType, debouncedSearch, statusFilter, page]);
 
-    setItems(nextItems);
-    setSelectedItemId(nextOpenItems[0]?.id ?? 0);
-    setFeedback(
-      isEnglish
-        ? `"${item.title}" was deleted from content management.`
-        : `تم حذف المنشور "${item.title}" من إدارة المحتوى.`,
-    );
+  const resetForType = (type: AdminContentType) => {
+    setActiveType(type);
+    setPage(1);
+    setFeedback(null);
   };
 
-  const handleShowExamples = () => {
-    const nextItems = resetAdminProjectRecords();
-    const nextOpenItems = nextItems.filter((currentItem) => !currentItem.processedAt);
+  const updateStatus = async (item: AdminContentItem, status: AdminContentStatus) => {
+    const actionKey = `${activeType}-${item.id}-${status}`;
+    try {
+      setActingKey(actionKey);
+      setFeedback(null);
 
-    setItems(nextItems);
-    setSelectedItemId(nextOpenItems[0]?.id ?? 0);
-    setFeedback(
+      if (activeType === 'projects') {
+        await updateAdminProjectStatus(item.id, status);
+      } else if (activeType === 'services') {
+        await updateAdminServiceStatus(item.id, status);
+      } else {
+        await updateAdminJobStatus(item.id, status);
+      }
+
+      setFeedback({
+        type: 'success',
+        message: isEnglish
+          ? `Status updated to ${getStatusLabel(status, true)}.`
+          : `تم تحديث الحالة إلى ${getStatusLabel(status, false)}.`,
+      });
+      await loadContent();
+    } catch (error) {
+      setFeedback({ type: 'error', message: getApiErrorMessage(error) });
+    } finally {
+      setActingKey(null);
+    }
+  };
+
+  const deleteItem = async (item: AdminContentItem) => {
+    const confirmed = window.confirm(
       isEnglish
-        ? 'Example content items were added so you can test the delete post button.'
-        : 'تمت إضافة أمثلة محتوى حتى تستطيع تجربة زر حذف منشور.',
+        ? `Delete "${item.title}" from content management?`
+        : `هل تريد حذف "${item.title}" من إدارة المحتوى؟`,
     );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const actionKey = `${activeType}-${item.id}-delete`;
+    try {
+      setActingKey(actionKey);
+      setFeedback(null);
+
+      if (activeType === 'projects') {
+        await deleteAdminContentProject(item.id);
+      } else if (activeType === 'services') {
+        await deleteAdminContentService(item.id);
+      } else {
+        await deleteAdminContentJob(item.id);
+      }
+
+      setFeedback({
+        type: 'success',
+        message: isEnglish ? 'Post deleted successfully.' : 'تم حذف المنشور بنجاح.',
+      });
+      await loadContent();
+    } catch (error) {
+      setFeedback({ type: 'error', message: getApiErrorMessage(error) });
+    } finally {
+      setActingKey(null);
+    }
   };
 
   return (
     <DashboardLayout userType="admin">
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
-        <section className="rounded-3xl bg-gradient-to-l from-slate-900 via-blue-900 to-blue-700 p-6 text-white">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="max-w-2xl">
-              <h2 className="text-3xl font-bold">
-                {isEnglish ? 'Content management' : 'إدارة المحتوى'}
-              </h2>
-              <p className="mt-2 text-blue-100">
-                {isEnglish
-                  ? 'Review jobs, services, and projects that need approval or were reported.'
-                  : 'مراجعة الوظائف والخدمات والمشاريع التي تحتاج اعتمادًا أو وصلت عليها بلاغات.'}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-white/10 px-4 py-3 text-sm text-white">
-              <p className="text-blue-100">
-                {isEnglish ? 'Items needing action' : 'عناصر تحتاج متابعة'}
-              </p>
-              <p className="mt-1 text-2xl font-bold">{openItems.length}</p>
-            </div>
+        <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-3xl font-bold">
+              {isEnglish ? 'Content management' : 'إدارة المحتوى'}
+            </h2>
+            <p className="mt-2 text-muted-foreground">
+              {isEnglish
+                ? 'Review projects, services, and jobs, then change publication status when needed.'
+                : 'عرض المشاريع والخدمات والوظائف وتغيير حالة النشر عند الحاجة.'}
+            </p>
           </div>
+          <Button variant="outline" onClick={loadContent} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            {isEnglish ? 'Refresh' : 'تحديث'}
+          </Button>
         </section>
 
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="pt-6 text-sm text-primary">{feedback}</CardContent>
-        </Card>
-
-        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <Card>
-            <CardHeader>
-              <CardTitle>{isEnglish ? 'Items under review' : 'العناصر المعروضة للمراجعة'}</CardTitle>
-              <CardDescription>
-                {isEnglish
-                  ? 'This list gathers content that needs a quick administrative decision.'
-                  : 'هذه القائمة تجمع المحتوى الذي يحتاج قرارًا إداريًا سريعًا.'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {openItems.length === 0 ? (
-                <div className="space-y-4 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                  {isEnglish
-                    ? 'There are no open items right now. Any new items will appear here automatically.'
-                    : 'لا توجد عناصر مفتوحة حاليًا. ستظهر أي عناصر جديدة هنا تلقائيًا.'}
-                </div>
-              ) : null}
-
-              {openItems.length === 0 ? (
-                <div className="flex justify-center">
-                  <Button type="button" variant="outline" onClick={handleShowExamples}>
-                    {isEnglish ? 'Show examples' : 'إظهار أمثلة'}
-                  </Button>
-                </div>
-              ) : null}
-
-              {openItems.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-border p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <FileText className="size-4 text-primary" />
-                        <h3 className="font-semibold">{item.title}</h3>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {getAdminProjectTypeLabel(item.type, isEnglish)}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {isEnglish ? 'Owner:' : 'المالك:'}{' '}
-                        <span className="font-medium text-foreground">
-                          {getAdminProjectOwnerLabel(item.owner, isEnglish)}
-                        </span>
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {isEnglish ? 'Related side:' : 'الجهة المرتبطة:'}{' '}
-                        <span className="font-medium text-foreground">{item.assignee}</span>
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {isEnglish ? 'Value:' : 'القيمة:'}{' '}
-                        <span className="font-medium text-foreground">{item.budget}</span>
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge className={getStatusClasses(item.status)}>
-                        {getDisplayStatusLabel(item.status, isEnglish)}
-                      </Badge>
-                      {(item.status === 'قيد المراجعة' ||
-                        item.status === 'نشط' ||
-                        item.status === 'قيد التنفيذ') && (
-                        <Badge variant="outline" className="gap-1">
-                          <ShieldAlert className="size-3.5" />
-                          {isEnglish ? 'Needs follow-up' : 'يحتاج متابعة'}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        handleProcessItem(item, isEnglish ? 'Approved or closed' : 'اعتماد أو إغلاق')
-                      }
-                    >
-                      {isEnglish ? 'Approve or close' : 'اعتماد أو إغلاق'}
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedItemId(item.id);
-                        setFeedback(
-                          isEnglish
-                            ? `Details for "${item.title}" are now shown in the side panel.`
-                            : `تم عرض تفاصيل "${item.title}" في اللوحة الجانبية.`,
-                        );
-                      }}
-                    >
-                      {isEnglish ? 'View details' : 'عرض التفاصيل'}
-                    </Button>
-
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleDeletePost(item)}
-                    >
-                      {isEnglish ? 'Delete post' : 'حذف منشور'}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>{isEnglish ? 'Item details' : 'تفاصيل العنصر'}</CardTitle>
-              <CardDescription>
-                {isEnglish
-                  ? 'Inspect the item first, then take the right action from the review list.'
-                  : 'استعرض بيانات العنصر أولًا، ثم اتخذ القرار المناسب من قائمة المراجعة.'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {selectedItem ? (
-                <div className="space-y-4 rounded-2xl border border-border bg-muted/20 p-5">
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold">{selectedItem.title}</h3>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge className={getStatusClasses(selectedItem.status)}>
-                        {getDisplayStatusLabel(selectedItem.status, isEnglish)}
-                      </Badge>
-                      <Badge variant="outline">
-                        {getAdminProjectTypeLabel(selectedItem.type, isEnglish)}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 text-sm">
-                    <p>
-                      {isEnglish ? 'Owner:' : 'المالك:'}{' '}
-                      <span className="font-medium">
-                        {getAdminProjectOwnerLabel(selectedItem.owner, isEnglish)}
-                      </span>
-                    </p>
-                    <p>
-                      {isEnglish ? 'Related side:' : 'الجهة المرتبطة:'}{' '}
-                      <span className="font-medium">{selectedItem.assignee}</span>
-                    </p>
-                    <p>
-                      {isEnglish ? 'Related value:' : 'القيمة المرتبطة:'}{' '}
-                      <span className="font-medium">{selectedItem.budget}</span>
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-                    {isEnglish
-                      ? 'Viewing details does not remove the item. The actual action only happens when you press approve or close.'
-                      : 'عرض التفاصيل لا يزيل العنصر. الإجراء الفعلي يحصل فقط عند الضغط على زر الاعتماد أو الإغلاق.'}
-                  </div>
-
-                  <Button
-                    variant="destructive"
-                    className="w-full"
-                    onClick={() => handleDeletePost(selectedItem)}
-                  >
-                    {isEnglish ? 'Delete post' : 'حذف منشور'}
-                  </Button>
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                  {isEnglish
-                    ? 'Choose any item with the view details button to show its explanation here.'
-                    : 'اختر أي عنصر من زر عرض التفاصيل ليظهر شرحه هنا.'}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {processedItems.length > 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>{isEnglish ? 'Handled items' : 'تمت معالجته'}</CardTitle>
-              <CardDescription>
-                {isEnglish
-                  ? 'Items that already received a final action inside content management.'
-                  : 'العناصر التي اتخذت لها قرارًا بالفعل داخل إدارة المحتوى.'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {processedItems.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-border p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="font-semibold">{item.title}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {getAdminProjectTypeLabel(item.type, isEnglish)}
-                      </p>
-                    </div>
-                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
-                      {isEnglish ? 'Done' : 'تم'}
-                    </Badge>
-                  </div>
-
-                  <div className="mt-3 space-y-1 text-sm text-muted-foreground">
-                    <p>
-                      {isEnglish ? 'Action:' : 'الإجراء:'}{' '}
-                      <span className="font-medium text-foreground">
-                        {getAdminProjectActionLabel(item.actionLabel, isEnglish)}
-                      </span>
-                    </p>
-                    <p>
-                      {isEnglish ? 'Owner:' : 'المالك:'}{' '}
-                      <span className="font-medium text-foreground">
-                        {getAdminProjectOwnerLabel(item.owner, isEnglish)}
-                      </span>
-                    </p>
-                    <p>
-                      {isEnglish ? 'Processed on:' : 'تمت المعالجة بتاريخ:'}{' '}
-                      <span className="font-medium text-foreground">
-                        {getAdminProjectProcessedDateLabel(item.processedAt, isEnglish)}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-              ))}
+        {feedback ? (
+          <Card
+            className={
+              feedback.type === 'error'
+                ? 'border-destructive/30 bg-destructive/5'
+                : 'border-primary/20 bg-primary/5'
+            }
+          >
+            <CardContent
+              className={
+                feedback.type === 'error'
+                  ? 'pt-6 text-sm text-destructive'
+                  : 'pt-6 text-sm text-primary'
+              }
+            >
+              {feedback.message}
             </CardContent>
           </Card>
         ) : null}
+
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <CardTitle>{activeLabel}</CardTitle>
+                <CardDescription>
+                  {pagination
+                    ? `${pagination.total} ${isEnglish ? 'items total' : 'عنصر بالمجموع'}`
+                    : isEnglish
+                      ? 'Content is loaded from the backend.'
+                      : 'يتم تحميل المحتوى من الباك.'}
+                </CardDescription>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {contentTypes.map((type) => (
+                  <Button
+                    key={type.value}
+                    variant={activeType === type.value ? 'default' : 'outline'}
+                    onClick={() => resetForType(type.value)}
+                  >
+                    {isEnglish ? type.labelEn : type.labelAr}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-3 lg:grid-cols-[1fr_260px]">
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground ltr:left-3 rtl:right-3" />
+                <Input
+                  className="ltr:pl-9 rtl:pr-9"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder={
+                    isEnglish ? 'Search by title or description' : 'ابحث حسب العنوان أو الوصف'
+                  }
+                />
+              </div>
+              <Select
+                value={statusFilter}
+                onValueChange={(value) => {
+                  setStatusFilter(value as StatusFilter);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{isEnglish ? 'All statuses' : 'كل الحالات'}</SelectItem>
+                  {statusOptions.map((status) => (
+                    <SelectItem key={status.value} value={status.value}>
+                      {isEnglish ? status.labelEn : status.labelAr}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {loading ? (
+              <div className="flex min-h-44 items-center justify-center gap-2 rounded-lg border border-dashed text-sm text-muted-foreground">
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+                {isEnglish ? 'Loading content...' : 'جار تحميل المحتوى...'}
+              </div>
+            ) : null}
+
+            {!loading && items.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                {isEnglish
+                  ? 'No content matches the current filters.'
+                  : 'لا يوجد محتوى مطابق للفلاتر الحالية.'}
+              </div>
+            ) : null}
+
+            {!loading && items.length > 0 ? (
+              <div className="space-y-4">
+                {items.map((item) => {
+                  const currentStatus = (item.status || 'active') as AdminContentStatus;
+                  const ownerName = getOwnerName(item, activeType);
+                  const categoryName = getCategoryName(item, activeType);
+
+                  return (
+                    <Card key={`${activeType}-${item.id}`}>
+                      <CardContent className="pt-6">
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                          <div className="min-w-0 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {activeType === 'jobs' ? (
+                                <BriefcaseBusiness className="h-4 w-4 text-primary" />
+                              ) : (
+                                <FileText className="h-4 w-4 text-primary" />
+                              )}
+                              <h3 className="font-semibold">{item.title}</h3>
+                              <Badge className={getStatusClass(currentStatus)}>
+                                {getStatusLabel(currentStatus, isEnglish)}
+                              </Badge>
+                            </div>
+                            <p className="line-clamp-2 text-sm text-muted-foreground">
+                              {getContentDescription(item) ||
+                                (isEnglish ? 'No description available.' : 'لا يوجد وصف متوفر.')}
+                            </p>
+                            <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
+                              <span>
+                                {isEnglish ? 'Owner' : 'المالك'}:{' '}
+                                <strong className="font-medium text-foreground">
+                                  {ownerName || (isEnglish ? 'Not available' : 'غير متوفر')}
+                                </strong>
+                              </span>
+                              <span>
+                                {isEnglish ? 'Category/location' : 'التصنيف/الموقع'}:{' '}
+                                <strong className="font-medium text-foreground">
+                                  {categoryName || (isEnglish ? 'Not available' : 'غير متوفر')}
+                                </strong>
+                              </span>
+                              <span>
+                                <strong className="font-medium text-foreground">
+                                  {getContentValue(item, activeType, isEnglish)}
+                                </strong>
+                              </span>
+                              <span>
+                                {isEnglish ? 'Created' : 'تاريخ النشر'}:{' '}
+                                <strong className="font-medium text-foreground">
+                                  {formatDate(item.created_at, isEnglish)}
+                                </strong>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2 xl:justify-end">
+                            {statusOptions.map((status) => {
+                              const actionKey = `${activeType}-${item.id}-${status.value}`;
+                              return (
+                                <Button
+                                  key={status.value}
+                                  size="sm"
+                                  variant={currentStatus === status.value ? 'default' : 'outline'}
+                                  disabled={actingKey !== null || currentStatus === status.value}
+                                  onClick={() => updateStatus(item, status.value)}
+                                >
+                                  {actingKey === actionKey ? (
+                                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                                  ) : null}
+                                  {isEnglish ? status.labelEn : status.labelAr}
+                                </Button>
+                              );
+                            })}
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={actingKey !== null}
+                              onClick={() => deleteItem(item)}
+                            >
+                              {actingKey === `${activeType}-${item.id}-delete` ? (
+                                <LoaderCircle className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                              {isEnglish ? 'Delete' : 'حذف'}
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {pagination && pagination.last_page > 1 ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm text-muted-foreground">
+                <span>
+                  {isEnglish ? 'Page' : 'الصفحة'} {pagination.current_page} /{' '}
+                  {pagination.last_page}
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={loading || page <= 1}
+                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  >
+                    {isEnglish ? 'Previous' : 'السابق'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={loading || page >= pagination.last_page}
+                    onClick={() => setPage((current) => current + 1)}
+                  >
+                    {isEnglish ? 'Next' : 'التالي'}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );

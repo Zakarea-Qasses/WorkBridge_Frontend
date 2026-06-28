@@ -18,7 +18,6 @@ const Messages = lazyPage(() => import('@/app/pages/user/Messages'));
 const Notifications = lazyPage(() => import('@/app/pages/user/Notifications'));
 const AppliedJobs = lazyPage(() => import('@/app/pages/user/AppliedJobs'));
 const Profile = lazyPage(() => import('@/app/pages/user/Profile'));
-const PublicProfile = lazyPage(() => import('@/app/pages/public/PublicProfile'));
 const Settings = lazyPage(() => import('@/app/pages/user/Settings'));
 const SupportCenter = lazyPage(() => import('@/app/pages/user/SupportCenter'));
 
@@ -43,7 +42,6 @@ export const userRoutes = [
   { path: '/applied-jobs', Component: AppliedJobs },
   { path: '/profile', Component: Profile },
   { path: '/profile/:id', Component: Profile },
-  { path: '/freelancers/:id', Component: PublicProfile },
   { path: '/settings', Component: Settings },
   { path: '/support', Component: SupportCenter },
   { path: '/complaints', Component: SupportCenter },

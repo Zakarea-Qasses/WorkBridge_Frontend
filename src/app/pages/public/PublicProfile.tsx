@@ -21,6 +21,7 @@ import {
 } from '@/app/components/ui';
 import { getApiErrorMessage } from '@/app/api/client';
 import {
+  getPublicProfile,
   getProfile,
   getUserReviews,
   PersonalProfile,
@@ -49,9 +50,9 @@ export default function PublicProfile() {
   useEffect(() => {
     let mounted = true;
 
-    if (!isOwnProfile || !id) {
+    if (!id) {
       setData(null);
-      setError('');
+      setError(isEnglish ? 'Profile id is missing.' : 'معرف الملف الشخصي غير موجود.');
       setIsLoading(false);
       return;
     }
@@ -59,22 +60,36 @@ export default function PublicProfile() {
     setIsLoading(true);
     setError('');
 
-    Promise.all([getProfile(), getUserReviews(id)])
-      .then(([profileResponse, reviewsResponse]) => {
-        if (!mounted) {
-          return;
-        }
-
-        setData({
+    const profileRequest = isOwnProfile
+      ? Promise.all([getProfile(), getUserReviews(id)]).then(([profileResponse, reviewsResponse]) => ({
           profile: profileResponse.profile,
           rating: reviewsResponse.rating_avg || profileResponse.rating_avg,
           reviewsCount: reviewsResponse.reviews_count,
           reviews: reviewsResponse.reviews,
-        });
+        }))
+      : getPublicProfile(id).then((profileResponse) => ({
+          profile: profileResponse.profile,
+          rating: profileResponse.rating_avg,
+          reviewsCount: profileResponse.reviews_count,
+          reviews: profileResponse.reviews,
+        }));
+
+    profileRequest
+      .then((profileData) => {
+        if (!mounted) {
+          return;
+        }
+
+        setData(profileData);
       })
       .catch((requestError) => {
         if (mounted) {
-          setError(getApiErrorMessage(requestError));
+          setError(
+            getApiErrorMessage(requestError) ||
+              (isEnglish
+                ? 'Public profile could not be loaded.'
+                : 'تعذر تحميل الملف الشخصي العام.'),
+          );
         }
       })
       .finally(() => {
@@ -86,7 +101,7 @@ export default function PublicProfile() {
     return () => {
       mounted = false;
     };
-  }, [id, isOwnProfile]);
+  }, [id, isEnglish, isOwnProfile]);
 
   const joinedAt = data?.profile.created_at
     ? new Intl.DateTimeFormat(isEnglish ? 'en' : 'ar', {
@@ -117,22 +132,6 @@ export default function PublicProfile() {
           <div className="flex min-h-96 items-center justify-center">
             <LoaderCircle className="size-9 animate-spin text-primary" />
           </div>
-        ) : !isOwnProfile ? (
-          <Card className="mx-auto max-w-2xl">
-            <CardContent className="flex min-h-72 flex-col items-center justify-center gap-4 text-center">
-              <User className="size-12 text-muted-foreground" />
-              <h1 className="text-xl font-semibold">
-                {isEnglish
-                  ? 'Public profile is currently unavailable'
-                  : 'الملف الشخصي العام غير متاح حالياً'}
-              </h1>
-              <p className="max-w-lg text-sm leading-6 text-muted-foreground">
-                {isEnglish
-                  ? 'The backend does not currently provide a public user profile endpoint.'
-                  : 'لا يوفر الباك حالياً مساراً لجلب بيانات الملف العام لمستخدم آخر.'}
-              </p>
-            </CardContent>
-          </Card>
         ) : error || !data ? (
           <Card className="mx-auto max-w-2xl">
             <CardContent className="flex min-h-72 flex-col items-center justify-center gap-4 text-center">
@@ -172,11 +171,13 @@ export default function PublicProfile() {
                             (isEnglish ? 'No job title added' : 'لم تتم إضافة مسمى وظيفي')}
                         </p>
                       </div>
-                      <Button asChild>
-                        <Link to="/profile">
-                          {isEnglish ? 'Edit profile' : 'تعديل الملف الشخصي'}
-                        </Link>
-                      </Button>
+                      {isOwnProfile ? (
+                        <Button asChild>
+                          <Link to="/profile">
+                            {isEnglish ? 'Edit profile' : 'تعديل الملف الشخصي'}
+                          </Link>
+                        </Button>
+                      ) : null}
                     </div>
 
                     <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3 text-sm text-muted-foreground">
