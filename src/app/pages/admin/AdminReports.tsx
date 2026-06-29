@@ -19,7 +19,13 @@ import {
   Textarea,
 } from '@/app/components/ui';
 import { getApiErrorMessage } from '@/app/api/client';
-import { getAllReports, Report, ReportDecisionPayload, updateReportDecision } from '@/app/api/endpoints';
+import {
+  getAllReports,
+  Report,
+  ReportAttachment,
+  ReportDecisionPayload,
+  updateReportDecision,
+} from '@/app/api/endpoints';
 
 type StatusMessage = { type: 'success' | 'error'; message: string } | null;
 type ReportStatusFilter = 'all' | 'pending' | 'accepted' | 'rejected';
@@ -29,7 +35,14 @@ type AdminAction = NonNullable<ReportDecisionPayload['admin_action']> | 'none';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
 const BACKEND_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
-function isProbablyFileReference(value: string) {
+function attachmentValue(attachment: ReportAttachment) {
+  return typeof attachment === 'string'
+    ? attachment
+    : attachment.url || attachment.path || attachment.name || '';
+}
+
+function isProbablyFileReference(attachment: ReportAttachment) {
+  const value = attachmentValue(attachment);
   return /^https?:\/\//i.test(value)
     || value.startsWith('/')
     || value.startsWith('storage/')
@@ -38,7 +51,8 @@ function isProbablyFileReference(value: string) {
     || /\.(pdf|png|jpe?g|webp|gif|docx?|xlsx?|zip)$/i.test(value);
 }
 
-function getAttachmentUrl(value: string) {
+function getAttachmentUrl(attachment: ReportAttachment) {
+  const value = attachmentValue(attachment);
   if (/^https?:\/\//i.test(value)) {
     return value;
   }
@@ -49,7 +63,11 @@ function getAttachmentUrl(value: string) {
   return `${BACKEND_BASE_URL}/${storagePath}`;
 }
 
-function getAttachmentLabel(value: string) {
+function getAttachmentLabel(attachment: ReportAttachment) {
+  const value = typeof attachment === 'string'
+    ? attachment
+    : attachment.name || attachment.path || attachment.url || '';
+
   try {
     const withoutQuery = value.split('?')[0];
     return decodeURIComponent(withoutQuery.split('/').filter(Boolean).pop() || value);
@@ -455,12 +473,12 @@ export default function AdminReports() {
                       <div className="rounded-md border p-3 text-sm">
                         <p className="mb-2 font-medium">{isEnglish ? 'Attachments' : 'المرفقات'}</p>
                         <div className="flex flex-wrap gap-2">
-                          {report.attachments.map((attachment) => {
+                          {report.attachments.map((attachment, index) => {
                             const label = getAttachmentLabel(attachment);
 
                             return isProbablyFileReference(attachment) ? (
                               <a
-                                key={attachment}
+                                key={`${report.id}-${label}-${index}`}
                                 className="rounded-md border px-3 py-1 text-primary hover:bg-primary/5"
                                 href={getAttachmentUrl(attachment)}
                                 target="_blank"
@@ -470,7 +488,7 @@ export default function AdminReports() {
                               </a>
                             ) : (
                               <span
-                                key={attachment}
+                                key={`${report.id}-${label}-${index}`}
                                 className="rounded-md border px-3 py-1 text-muted-foreground"
                               >
                                 {label}

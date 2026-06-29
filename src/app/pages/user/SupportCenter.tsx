@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, LoaderCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, LoaderCircle, Paperclip, RefreshCw, X } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import {
@@ -24,6 +24,7 @@ import {
   createReport,
   getMyReports,
   Report,
+  ReportAttachment,
   ReportCategory,
   ReportPriority,
 } from '@/app/api/endpoints';
@@ -34,7 +35,7 @@ interface SupportForm {
   description: string;
   category: ReportCategory;
   priority: ReportPriority;
-  attachmentsText: string;
+  attachments: File[];
 }
 
 type Status = {
@@ -42,13 +43,34 @@ type Status = {
   message: string;
 } | null;
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
+const BACKEND_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
+
 const initialForm: SupportForm = {
   title: '',
   description: '',
   category: 'support',
   priority: 'normal',
-  attachmentsText: '',
+  attachments: [],
 };
+
+function attachmentLabel(attachment: ReportAttachment) {
+  if (typeof attachment === 'string') {
+    return attachment.split('/').filter(Boolean).pop() || attachment;
+  }
+
+  return attachment.name || attachment.path || attachment.url || 'Attachment';
+}
+
+function attachmentUrl(attachment: ReportAttachment) {
+  const value = typeof attachment === 'string' ? attachment : attachment.url || attachment.path || '';
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) return value;
+
+  const normalized = value.replace(/^\/+/, '');
+  const storagePath = normalized.startsWith('storage/') ? normalized : `storage/${normalized}`;
+  return `${BACKEND_BASE_URL}/${storagePath}`;
+}
 
 function categoryLabel(category: string, isEnglish: boolean) {
   const labels: Record<string, { ar: string; en: string }> = {
@@ -203,13 +225,22 @@ export default function SupportCenter() {
     setFieldErrors((current) => ({ ...current, [key]: [] }));
   };
 
-  const parseAttachments = () => {
-    const values = form.attachmentsText
-      .split('\n')
-      .map((value) => value.trim())
-      .filter(Boolean);
+  const addAttachments = (files: FileList | null) => {
+    const nextFiles = Array.from(files || []);
+    if (!nextFiles.length) return;
 
-    return values.length ? values : null;
+    setForm((current) => ({
+      ...current,
+      attachments: [...current.attachments, ...nextFiles],
+    }));
+    setFieldErrors((current) => ({ ...current, attachments: [] }));
+  };
+
+  const removeAttachment = (index: number) => {
+    setForm((current) => ({
+      ...current,
+      attachments: current.attachments.filter((_, itemIndex) => itemIndex !== index),
+    }));
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -226,7 +257,7 @@ export default function SupportCenter() {
         category: form.category,
         priority: form.priority,
         description: form.description.trim(),
-        attachments: parseAttachments(),
+        attachments: form.attachments.length ? form.attachments : null,
       });
       setForm(initialForm);
       setStatus({
@@ -373,24 +404,50 @@ export default function SupportCenter() {
 
                 <div className="space-y-2">
                   <Label htmlFor="support-attachments">
-                    {isEnglish ? 'Attachment references' : 'مراجع المرفقات'}
+                    {isEnglish ? 'Attachments' : 'المرفقات'}
                   </Label>
-                  <Textarea
+                  <Input
                     id="support-attachments"
-                    rows={3}
-                    placeholder={
-                      isEnglish
-                        ? 'Optional: write one file name or URL per line. File upload is not supported by the backend yet.'
-                        : 'اختياري: اكتب اسم ملف أو رابط في كل سطر. رفع الملفات غير مدعوم من الباك حالياً.'
-                    }
-                    value={form.attachmentsText}
-                    onChange={(event) => updateForm('attachmentsText', event.target.value)}
+                    type="file"
+                    multiple
+                    accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt"
+                    onChange={(event) => {
+                      addAttachments(event.target.files);
+                      event.target.value = '';
+                    }}
                   />
                   <p className="text-xs text-muted-foreground">
                     {isEnglish
-                      ? 'Real file upload is not supported currently.'
-                      : 'إرفاق الملفات كرفع مباشر غير مدعوم حالياً.'}
+                      ? 'You can upload images, documents, spreadsheets, zip files, or text files up to 10 MB each.'
+                      : 'يمكنك رفع صور أو مستندات أو جداول أو ملفات مضغوطة أو نصية، حتى 10 ميغابايت لكل ملف.'}
                   </p>
+                  {form.attachments.length ? (
+                    <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                      {form.attachments.map((file, index) => (
+                        <div
+                          key={`${file.name}-${file.lastModified}-${index}`}
+                          className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <Paperclip className="size-4 text-primary" />
+                            <span className="truncate">{file.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              ({Math.ceil(file.size / 1024)} KB)
+                            </span>
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeAttachment(index)}
+                          >
+                            <X className="me-1 size-4" />
+                            {isEnglish ? 'Remove' : 'إزالة'}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                   {fieldErrors.attachments?.[0] ? (
                     <p className="text-xs text-destructive">{fieldErrors.attachments[0]}</p>
                   ) : null}
@@ -462,10 +519,32 @@ export default function SupportCenter() {
                       {report.attachments?.length ? (
                         <div className="rounded-md bg-muted/40 p-3 text-sm">
                           <p className="mb-2 font-medium">{isEnglish ? 'Attachments' : 'المرفقات'}</p>
-                          <div className="space-y-1 text-muted-foreground">
-                            {report.attachments.map((attachment) => (
-                              <p key={`${report.id}-${attachment}`}>{attachment}</p>
-                            ))}
+                          <div className="flex flex-wrap gap-2">
+                            {report.attachments.map((attachment, index) => {
+                              const label = attachmentLabel(attachment);
+                              const url = attachmentUrl(attachment);
+
+                              return url ? (
+                                <a
+                                  key={`${report.id}-${label}-${index}`}
+                                  className="inline-flex items-center gap-2 rounded-md border bg-background px-3 py-1 text-primary hover:bg-primary/5"
+                                  href={url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  <Paperclip className="size-4" />
+                                  {label}
+                                </a>
+                              ) : (
+                                <span
+                                  key={`${report.id}-${label}-${index}`}
+                                  className="inline-flex items-center gap-2 rounded-md border bg-background px-3 py-1 text-muted-foreground"
+                                >
+                                  <Paperclip className="size-4" />
+                                  {label}
+                                </span>
+                              );
+                            })}
                           </div>
                         </div>
                       ) : (

@@ -64,9 +64,7 @@ export default function DashboardLayout({
         : '/notifications';
 
   const messagesLink =
-    userType === 'admin'
-      ? '/admin/messages'
-      : userType === 'company'
+    userType === 'company'
         ? '/company/messages'
         : '/messages';
 
@@ -189,7 +187,6 @@ export default function DashboardLayout({
       { icon: FileText, label: isEnglish ? 'Content Management' : 'إدارة المحتوى', path: '/admin/projects' },
       { icon: Wallet, label: isEnglish ? 'Finance Management' : 'الإدارة المالية', path: '/admin/finance' },
       { icon: Wallet, label: isEnglish ? 'Site Wallet' : 'محفظة الموقع', path: '/admin/site-wallet' },
-      { icon: MessageSquare, label: isEnglish ? 'Admin Messages' : 'محادثات الأدمن', path: '/admin/messages' },
       { icon: Bell, label: isEnglish ? 'Notifications' : 'الإشعارات', path: '/admin/notifications' },
       { icon: Settings, label: isEnglish ? 'Settings' : 'الإعدادات', path: '/admin/settings' },
     ],

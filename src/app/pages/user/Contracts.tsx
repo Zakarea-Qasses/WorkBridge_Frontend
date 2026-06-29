@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { LoaderCircle, MessageSquare, RefreshCw } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
+import ContractReviewPanel from '@/app/components/contracts/ContractReviewPanel';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import {
@@ -103,6 +104,12 @@ export function ContractsPage({ userType = 'user' }: { userType?: 'user' | 'comp
     }
   };
 
+  const updateContractInList = (updatedContract: Contract) => {
+    setContracts((current) =>
+      current.map((contract) => (contract.id === updatedContract.id ? updatedContract : contract)),
+    );
+  };
+
   return (
     <DashboardLayout userType={userType === 'company' ? 'company' : 'user'}>
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
@@ -154,6 +161,12 @@ export function ContractsPage({ userType = 'user' }: { userType?: 'user' | 'comp
                       {isClient && ['funded', 'in_progress'].includes(contract.status) ? <Button disabled={busyId === contract.id} onClick={() => runAction(contract, 'complete')}>{isEnglish ? 'Confirm completion' : 'تأكيد الإكمال'}</Button> : null}
                       {!['completed', 'canceled', 'refunded'].includes(contract.status) ? <Button variant="destructive" disabled={busyId === contract.id} onClick={() => runAction(contract, 'cancel')}>{isEnglish ? 'Cancel' : 'إلغاء'}</Button> : null}
                     </div>
+                    <ContractReviewPanel
+                      contract={contract}
+                      currentUserId={user?.id}
+                      isEnglish={isEnglish}
+                      onChanged={updateContractInList}
+                    />
                   </CardContent>
                 </Card>
               );

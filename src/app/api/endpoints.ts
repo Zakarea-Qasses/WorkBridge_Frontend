@@ -91,6 +91,48 @@ export interface CompanyDashboardResponse {
   user: WorkBridgeUser;
 }
 
+export interface AdminDashboardResponse {
+  message: string;
+  role: 'admin';
+  user: WorkBridgeUser;
+  stats: {
+    total_users: number;
+    active_companies: number;
+    open_disputes: number;
+    platform_profit: number | string;
+  };
+  company_verification_requests: Array<{
+    id: number;
+    company_name: string | null;
+    owner_name: string | null;
+    owner_email: string | null;
+    status: string;
+    created_at: string;
+  }>;
+  content_needing_review: Array<{
+    id: number;
+    title: string;
+    type: string;
+    owner_name: string | null;
+    status: string;
+    created_at: string;
+  }>;
+  dispute_alerts: Array<{
+    id: number;
+    title: string;
+    status: string;
+    reporter_name: string | null;
+    client_name: string | null;
+    freelancer_name: string | null;
+    amount: number | string | null;
+    created_at: string;
+  }>;
+  charts: {
+    users_growth: Array<{ month: string; count: number }>;
+    monthly_revenue: Array<{ month: string; total: number | string }>;
+  };
+}
+
 export interface ServiceCategory {
   id: number;
   name: string;
@@ -199,6 +241,13 @@ export interface Contract {
   project?: { id: number; title: string } | null;
   service_request?: { id: number; title: string } | null;
   job_post?: { id: number; title: string } | null;
+  reviews?: ProfileReview[];
+}
+
+export interface ReviewPayload {
+  contract_id: number;
+  rating: number;
+  comment?: string | null;
 }
 
 export type JobApplicationStatus = 'pending' | 'accepted' | 'rejected';
@@ -273,12 +322,19 @@ export interface Wallet {
   created_at: string;
   updated_at: string;
   transactions: WalletTransaction[];
+  user?: Pick<WorkBridgeUser, 'id' | 'name' | 'email'> | null;
 }
 
 export interface WalletOperationResponse {
   status: boolean;
   message: string;
   transaction: WalletTransaction;
+}
+
+export interface AdminEarningsResponse {
+  status: boolean;
+  balance: number | string;
+  earnings: number | string;
 }
 
 export interface UserNotification {
@@ -361,6 +417,17 @@ export interface ReportUser {
   role: string;
 }
 
+export type ReportAttachment =
+  | string
+  | {
+      type?: 'file' | 'reference' | string;
+      name?: string | null;
+      path?: string | null;
+      url?: string | null;
+      mime_type?: string | null;
+      size?: number | null;
+    };
+
 export interface Report {
   id: number;
   reporter_id: number;
@@ -371,7 +438,7 @@ export interface Report {
   category: ReportCategory | string;
   priority: ReportPriority | string;
   description: string;
-  attachments: string[] | null;
+  attachments: ReportAttachment[] | null;
   status: ReportStatus;
   admin_decision: string | null;
   created_at: string;
@@ -466,7 +533,8 @@ export interface CreateReportPayload {
   category?: ReportCategory;
   priority?: ReportPriority;
   description: string;
-  attachments?: string[] | null;
+  attachments?: Array<string | File> | null;
+  attachment_references?: string[] | null;
 }
 
 export interface ReportDecisionPayload {
@@ -670,6 +738,11 @@ export async function getCompanyContractsPage(page = 1) {
   return response.contracts;
 }
 
+export async function getContract(id: number) {
+  const response = await apiRequest<{ contract: Contract }>(`/contracts/${id}`);
+  return response.contract;
+}
+
 export function startContract(id: number) {
   return apiRequest(`/contracts/${id}/start`, { method: 'POST' });
 }
@@ -680,6 +753,29 @@ export function completeContract(id: number) {
 
 export function cancelContract(id: number) {
   return apiRequest(`/contracts/${id}/cancel`, { method: 'POST' });
+}
+
+export async function createReview(payload: ReviewPayload) {
+  const response = await apiRequest<{ message: string; review: ProfileReview }>('/reviews', {
+    method: 'POST',
+    body: payload,
+  });
+  return response.review;
+}
+
+export async function updateReview(
+  id: string | number,
+  payload: Omit<Partial<ReviewPayload>, 'contract_id'>,
+) {
+  const response = await apiRequest<{ message: string; review: ProfileReview }>(`/reviews/${id}`, {
+    method: 'PUT',
+    body: payload,
+  });
+  return response.review;
+}
+
+export function deleteReview(id: string | number) {
+  return apiRequest<{ message: string }>(`/reviews/${id}`, { method: 'DELETE' });
 }
 
 export async function getJobs() {
@@ -969,9 +1065,52 @@ export async function getMyReports(page = 1) {
 }
 
 export async function createReport(payload: CreateReportPayload) {
+  const hasFiles = payload.attachments?.some((attachment) => attachment instanceof File);
+
+  if (hasFiles) {
+    const formData = new FormData();
+
+    if (payload.target_type) formData.append('target_type', payload.target_type);
+    if (payload.target_id !== undefined) formData.append('target_id', String(payload.target_id));
+    if (payload.contract_id !== undefined && payload.contract_id !== null) {
+      formData.append('contract_id', String(payload.contract_id));
+    }
+    if (payload.title !== undefined && payload.title !== null) formData.append('title', payload.title);
+    if (payload.category) formData.append('category', payload.category);
+    if (payload.priority) formData.append('priority', payload.priority);
+    formData.append('description', payload.description);
+
+    payload.attachments?.forEach((attachment) => {
+      if (attachment instanceof File) {
+        formData.append('attachments[]', attachment);
+      } else if (attachment.trim()) {
+        formData.append('attachment_references[]', attachment.trim());
+      }
+    });
+
+    payload.attachment_references?.forEach((reference) => {
+      if (reference.trim()) {
+        formData.append('attachment_references[]', reference.trim());
+      }
+    });
+
+    const response = await apiRequest<{ message: string; report: Report }>('/reports', {
+      method: 'POST',
+      body: formData,
+    });
+    return response.report;
+  }
+
   const response = await apiRequest<{ message: string; report: Report }>('/reports', {
     method: 'POST',
-    body: payload,
+    body: {
+      ...payload,
+      attachment_references:
+        payload.attachment_references ||
+        payload.attachments?.filter((attachment): attachment is string => typeof attachment === 'string') ||
+        undefined,
+      attachments: undefined,
+    },
   });
   return response.report;
 }
@@ -1007,9 +1146,32 @@ export function getCompanyDashboard() {
   return apiRequest<CompanyDashboardResponse>('/dashboard/company');
 }
 
+export function getAdminDashboard() {
+  return apiRequest<AdminDashboardResponse>('/dashboard/admin');
+}
+
 export async function getMyWallet() {
   const response = await apiRequest<{ status: boolean; wallet: Wallet }>('/wallet');
   return response.wallet;
+}
+
+export async function getAdminWallets() {
+  const response = await apiRequest<{ status: boolean; wallets: Wallet[] }>('/admin/wallets');
+  return response.wallets;
+}
+
+export async function getAdminTransactionsWallet() {
+  const response = await apiRequest<{ status: boolean; wallet: Wallet }>('/admin/transactions');
+  return response.wallet;
+}
+
+export async function getEscrowTransactionsWallet() {
+  const response = await apiRequest<{ status: boolean; wallet: Wallet }>('/admin/escrow/transactions');
+  return response.wallet;
+}
+
+export async function getAdminEarnings() {
+  return apiRequest<AdminEarningsResponse>('/admin/earnings');
 }
 
 export function depositWallet(amount: number) {

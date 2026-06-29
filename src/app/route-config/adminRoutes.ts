@@ -8,7 +8,6 @@ const AdminFinance = lazyPage(() => import('@/app/pages/admin/AdminFinance'));
 const AdminProjects = lazyPage(() => import('@/app/pages/admin/AdminProjects'));
 const AdminReports = lazyPage(() => import('@/app/pages/admin/AdminReports'));
 const AdminSiteWallet = lazyPage(() => import('@/app/pages/admin/AdminSiteWallet'));
-const AdminMessages = lazyPage(() => import('@/app/pages/admin/AdminMessages'));
 const AdminNotifications = lazyPage(() => import('@/app/pages/admin/AdminNotifications'));
 const AdminSettings = lazyPage(() => import('@/app/pages/admin/AdminSettings'));
 
@@ -22,7 +21,6 @@ export const adminRoutes = [
   { path: '/admin/projects', Component: AdminProjects },
   { path: '/admin/reports', Component: AdminReports },
   { path: '/admin/site-wallet', Component: AdminSiteWallet },
-  { path: '/admin/messages', Component: AdminMessages },
   { path: '/admin/notifications', Component: AdminNotifications },
   { path: '/admin/settings', Component: AdminSettings },
 ];

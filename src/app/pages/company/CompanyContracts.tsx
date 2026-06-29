@@ -13,6 +13,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
+import ContractReviewPanel from '@/app/components/contracts/ContractReviewPanel';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui';
 import { ApiError, getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import {
@@ -259,6 +260,12 @@ export default function CompanyContracts() {
     }
   };
 
+  const updateContractInList = (updatedContract: Contract) => {
+    setContracts((current) =>
+      current.map((contract) => (contract.id === updatedContract.id ? updatedContract : contract)),
+    );
+  };
+
   const canGoPrevious = Boolean(pagination && pagination.current_page > 1);
   const canGoNext = Boolean(pagination && pagination.current_page < pagination.last_page);
 
@@ -428,6 +435,12 @@ export default function CompanyContracts() {
                         </Button>
                       ) : null}
                     </div>
+                    <ContractReviewPanel
+                      contract={contract}
+                      currentUserId={user?.id}
+                      isEnglish={isEnglish}
+                      onChanged={updateContractInList}
+                    />
                   </CardContent>
                 </Card>
               );

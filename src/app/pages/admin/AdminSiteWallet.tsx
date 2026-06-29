@@ -1,287 +1,343 @@
-import { useMemo, useState } from 'react';
-import { ArrowLeftRight, Landmark, ShieldCheck, TimerReset, Wallet as WalletIcon } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  Landmark,
+  RefreshCw,
+  ShieldCheck,
+  Wallet as WalletIcon,
+} from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui';
-import { getSiteEscrows, getWalletData, refundEscrowToClient, releaseEscrowToProvider } from '@/app/storage';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/app/components/ui';
+import { getApiErrorMessage } from '@/app/api/client';
+import {
+  Wallet,
+  WalletTransaction,
+  getAdminTransactionsWallet,
+  getEscrowTransactionsWallet,
+} from '@/app/api/endpoints';
 
-function isReleaseDue(releaseOn: string) {
-  return new Date(releaseOn) <= new Date();
+function toAmount(value: number | string | null | undefined) {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : 0;
 }
 
-function getEscrowBadge(status: string) {
-  switch (status) {
-    case 'released':
-      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-    case 'refunded':
-      return 'bg-blue-100 text-blue-700 border-blue-200';
-    case 'disputed':
-      return 'bg-rose-100 text-rose-700 border-rose-200';
-    default:
-      return 'bg-amber-100 text-amber-800 border-amber-200';
-  }
+function formatAmount(value: number | string | null | undefined, isEnglish: boolean) {
+  return new Intl.NumberFormat(isEnglish ? 'en' : 'ar', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(toAmount(value));
 }
 
-function getEscrowStatusLabel(status: string, isEnglish: boolean) {
-  switch (status) {
-    case 'released':
-      return isEnglish ? 'Released' : 'تم التحويل';
-    case 'refunded':
-      return isEnglish ? 'Refunded' : 'تمت الإعادة';
-    case 'disputed':
-      return isEnglish ? 'Open dispute' : 'نزاع مفتوح';
-    default:
-      return isEnglish ? 'Reserved' : 'محجوز';
-  }
+function formatDate(value: string | undefined, isEnglish: boolean) {
+  if (!value) return isEnglish ? 'Unavailable' : 'غير متوفر';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(isEnglish ? 'en' : 'ar', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
 }
 
-function getIssueStatusBox(status: string) {
-  if (status === 'disputed') {
-    return 'border-rose-200 bg-rose-50 text-rose-700';
-  }
+function transactionTypeLabel(type: string, isEnglish: boolean) {
+  const labels: Record<string, [string, string]> = {
+    contract_fund: ['Contract funding', 'تمويل عقد'],
+    contract_payment: ['Contract payment', 'دفعة عقد'],
+    refund: ['Refund', 'استرداد'],
+    commission: ['Commission', 'عمولة'],
+    platform_commission: ['Platform commission', 'عمولة المنصة'],
+    admin_receive: ['Admin receipt', 'استلام إداري'],
+    deposit: ['Deposit', 'إيداع'],
+    withdraw: ['Withdrawal', 'سحب'],
+  };
 
-  return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  return labels[type]?.[isEnglish ? 0 : 1] || type.replaceAll('_', ' ');
 }
 
-function getIssueStatusText(status: string, isEnglish: boolean) {
-  if (status === 'disputed') {
-    return isEnglish ? 'A dispute or complaint is open on this escrow' : 'مرفوع عليه نزاع أو شكوى';
-  }
+function statusLabel(status: string, isEnglish: boolean) {
+  const labels: Record<string, [string, string]> = {
+    completed: ['Completed', 'مكتملة'],
+    pending: ['Pending', 'معلقة'],
+    failed: ['Failed', 'فشلت'],
+  };
 
-  return isEnglish ? 'No dispute is open and everything looks fine' : 'لا يوجد نزاع، والأمور تمام';
+  return labels[status]?.[isEnglish ? 0 : 1] || status.replaceAll('_', ' ');
+}
+
+function sortTransactions(transactions: WalletTransaction[]) {
+  return [...transactions].sort(
+    (first, second) =>
+      new Date(second.created_at).getTime() - new Date(first.created_at).getTime(),
+  );
 }
 
 export default function AdminSiteWallet() {
   const { language, isEnglish } = useLanguage();
-  const [feedback, setFeedback] = useState(
-    isEnglish
-      ? 'Funds stay reserved for one week, then they can be released to the provider or refunded when needed.'
-      : 'الأموال تبقى محجوزة لمدة أسبوع، وبعدها يمكن تحويلها لمقدم الخدمة أو إعادتها عند الحاجة.',
+  const [escrowWallet, setEscrowWallet] = useState<Wallet | null>(null);
+  const [adminWallet, setAdminWallet] = useState<Wallet | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadWallets = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [escrowResponse, adminResponse] = await Promise.all([
+        getEscrowTransactionsWallet(),
+        getAdminTransactionsWallet(),
+      ]);
+      setEscrowWallet(escrowResponse);
+      setAdminWallet(adminResponse);
+    } catch (requestError) {
+      setEscrowWallet(null);
+      setAdminWallet(null);
+      setError(getApiErrorMessage(requestError));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadWallets();
+  }, [loadWallets]);
+
+  const escrowTransactions = useMemo(
+    () => sortTransactions(escrowWallet?.transactions || []),
+    [escrowWallet?.transactions],
   );
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  const wallet = useMemo(() => getWalletData('site'), [refreshKey]);
-  const escrows = useMemo(() => getSiteEscrows(), [refreshKey]);
-  const { balance, transactions } = wallet;
+  const adminTransactions = useMemo(
+    () => sortTransactions(adminWallet?.transactions || []),
+    [adminWallet?.transactions],
+  );
 
-  const handleRefresh = (message: string) => {
-    setFeedback(message);
-    setRefreshKey((current) => current + 1);
-  };
+  const escrowCredits = useMemo(
+    () =>
+      escrowTransactions
+        .filter((transaction) => transaction.direction === 'credit')
+        .reduce((total, transaction) => total + toAmount(transaction.amount), 0),
+    [escrowTransactions],
+  );
+
+  const escrowDebits = useMemo(
+    () =>
+      escrowTransactions
+        .filter((transaction) => transaction.direction === 'debit')
+        .reduce((total, transaction) => total + toAmount(transaction.amount), 0),
+    [escrowTransactions],
+  );
 
   return (
     <DashboardLayout userType="admin">
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
-        <section>
-          <h2 className="text-3xl font-bold">{isEnglish ? 'Site wallet' : 'محفظة الموقع'}</h2>
-          <p className="mt-2 text-muted-foreground">
-            {isEnglish
-              ? 'Track reserved client funds here. They are not transferred immediately; they stay reserved for a full week as protection against any issue or emergency.'
-              : 'هنا نتابع المبالغ المحجوزة من العملاء. لا يتم تسليمها فورًا، بل تبقى أسبوعًا كاملًا احتياطًا لأي مشكلة أو طارئ.'}
-          </p>
+        <section className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-bold">
+              {isEnglish ? 'Escrow Wallet' : 'محفظة الوسيط'}
+            </h2>
+            <p className="mt-2 text-muted-foreground">
+              {isEnglish
+                ? 'Track real reserved funds and escrow transaction history from the backend.'
+                : 'متابعة المبالغ المحجوزة وحركات محفظة الوسيط الحقيقية من الباك.'}
+            </p>
+          </div>
+          <Button variant="outline" disabled={loading} onClick={() => void loadWallets()}>
+            <RefreshCw className={`me-2 size-4 ${loading ? 'animate-spin' : ''}`} />
+            {isEnglish ? 'Refresh' : 'تحديث'}
+          </Button>
         </section>
 
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="pt-6 text-sm text-primary">{feedback}</CardContent>
-        </Card>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>{isEnglish ? 'Total balance' : 'إجمالي الرصيد'}</CardDescription>
-              <CardTitle className="text-3xl">${balance.total.toLocaleString()}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex items-center gap-2 text-sm text-muted-foreground">
-              <WalletIcon className="size-4 text-primary" />
-              {isEnglish ? 'Everything that entered the site wallet' : 'مجموع ما دخل إلى محفظة الموقع'}
+        {error ? (
+          <Card className="border-destructive/30 bg-destructive/5">
+            <CardContent className="flex items-center gap-2 pt-6 text-sm text-destructive">
+              <AlertCircle className="size-4" />
+              {error}
             </CardContent>
           </Card>
+        ) : null}
 
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="pt-6 text-sm text-primary">
+            {isEnglish
+              ? 'Release or refund decisions are handled from Reports Management when a report is linked to a contract.'
+              : 'قرارات تحرير المبلغ أو إرجاعه تتم من إدارة البلاغات عندما يكون البلاغ مرتبطا بعقد.'}
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardDescription>{isEnglish ? 'Reserved balance' : 'الرصيد المحجوز'}</CardDescription>
-              <CardTitle className="text-3xl">${balance.reserved.toLocaleString()}</CardTitle>
+              <CardDescription>{isEnglish ? 'Escrow balance' : 'رصيد الوسيط'}</CardDescription>
+              <CardTitle className="text-3xl">
+                {loading ? (
+                  <span className="block h-9 w-28 animate-pulse rounded bg-muted" />
+                ) : (
+                  formatAmount(escrowWallet?.balance || 0, isEnglish)
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex items-center gap-2 text-sm text-muted-foreground">
               <ShieldCheck className="size-4 text-primary" />
-              {isEnglish
-                ? 'Amounts currently reserved before release or refund'
-                : 'مبالغ قيد الحجز قبل التحويل أو الإعادة'}
+              {isEnglish ? 'Reserved funds wallet' : 'محفظة المبالغ المحجوزة'}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-3">
-              <CardDescription>{isEnglish ? 'Available balance' : 'الرصيد المتاح'}</CardDescription>
-              <CardTitle className="text-3xl">${balance.available.toLocaleString()}</CardTitle>
+              <CardDescription>{isEnglish ? 'Escrow credits' : 'داخل للوسيط'}</CardDescription>
+              <CardTitle className="text-3xl">{formatAmount(escrowCredits, isEnglish)}</CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-center gap-2 text-sm text-muted-foreground">
+              <WalletIcon className="size-4 text-primary" />
+              {isEnglish ? 'Total credit movements' : 'مجموع الحركات الدائنة'}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardDescription>{isEnglish ? 'Escrow debits' : 'خارج من الوسيط'}</CardDescription>
+              <CardTitle className="text-3xl">{formatAmount(escrowDebits, isEnglish)}</CardTitle>
             </CardHeader>
             <CardContent className="flex items-center gap-2 text-sm text-muted-foreground">
               <Landmark className="size-4 text-primary" />
-              {isEnglish ? 'Appears when later release stages are approved' : 'يظهر عند اعتماد مراحل أخرى لاحقًا'}
+              {isEnglish ? 'Released or refunded amounts' : 'مبالغ محررة أو مستردة'}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardDescription>{isEnglish ? 'Admin wallet' : 'محفظة الأدمن'}</CardDescription>
+              <CardTitle className="text-3xl">{formatAmount(adminWallet?.balance || 0, isEnglish)}</CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CheckCircle2 className="size-4 text-primary" />
+              {isEnglish ? 'Revenue and commissions' : 'الأرباح والعمولات'}
             </CardContent>
           </Card>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{isEnglish ? 'Active escrow operations' : 'عمليات الحجز الجارية'}</CardTitle>
-            <CardDescription>
-              {isEnglish
-                ? 'Current flow: the client pays, the amount stays reserved for a week, then it is released to the provider or refunded by admin decision.'
-                : 'السيناريو الحالي: العميل يدفع، المبلغ يُحجز أسبوعًا، ثم يتحول لمقدم الخدمة أو يُعاد للعميل بقرار الأدمن.'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {escrows.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                {isEnglish ? 'There are no escrow operations yet.' : 'لا توجد عمليات حجز حتى الآن.'}
-              </div>
-            ) : null}
+        <TransactionsTable
+          title={isEnglish ? 'Escrow wallet transactions' : 'حركات محفظة الوسيط'}
+          description={
+            isEnglish
+              ? 'Every backend transaction recorded on the escrow wallet.'
+              : 'كل حركة مالية مسجلة على محفظة الوسيط في الباك.'
+          }
+          transactions={escrowTransactions}
+          loading={loading}
+          isEnglish={isEnglish}
+        />
 
-            {escrows.map((escrow) => {
-              const due = isReleaseDue(escrow.releaseOn);
-              const canRelease = escrow.status === 'reserved' && due;
-              const canRefund = escrow.status === 'reserved' || escrow.status === 'disputed';
-
-              return (
-                <div key={escrow.id} className="space-y-4 rounded-2xl border border-border p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <ArrowLeftRight className="size-4 text-primary" />
-                        <h3 className="font-semibold">{escrow.projectTitle}</h3>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {isEnglish ? 'Client:' : 'العميل:'} {escrow.clientName} | {isEnglish ? 'Provider:' : 'مقدم الخدمة:'} {escrow.providerName}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {isEnglish ? 'Reserved on:' : 'تاريخ الحجز:'} {escrow.reservedAt} | {isEnglish ? 'Release date:' : 'موعد التحويل:'} {escrow.releaseOn}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <Badge className={getEscrowBadge(escrow.status)}>
-                        {getEscrowStatusLabel(escrow.status, isEnglish)}
-                      </Badge>
-                      <span className="text-lg font-semibold text-primary">
-                        ${escrow.amount.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl bg-muted/60 p-3 text-sm text-muted-foreground">
-                    {escrow.status === 'reserved' && !due ? (
-                      <div className="flex items-center gap-2">
-                        <TimerReset className="size-4 text-primary" />
-                        {isEnglish
-                          ? `This amount remains reserved until ${escrow.releaseOn} before it can be released to the provider.`
-                          : `يبقى هذا المبلغ محجوزًا حتى ${escrow.releaseOn} قبل التحويل لمقدم الخدمة.`}
-                      </div>
-                    ) : null}
-                    {escrow.status === 'reserved' && due
-                      ? isEnglish
-                        ? 'The one-week hold is over, and the amount can now be released to the provider.'
-                        : 'اكتملت مدة الأسبوع، ويمكن الآن تحويل المبلغ لمقدم الخدمة.'
-                      : null}
-                    {escrow.status === 'disputed'
-                      ? isEnglish
-                        ? 'There is an open dispute on this escrow. The admin can refund the client or approve the release to the provider.'
-                        : 'يوجد نزاع مفتوح على هذه العملية. يمكن للأدمن إعادة المبلغ أو اعتماد التحويل لمقدم الخدمة.'
-                      : null}
-                    {escrow.status === 'released'
-                      ? isEnglish
-                        ? `The release to the provider was approved${escrow.resolvedAt ? ` on ${escrow.resolvedAt}` : ''}.`
-                        : `تم اعتماد التحويل لمقدم الخدمة${escrow.resolvedAt ? ` بتاريخ ${escrow.resolvedAt}` : ''}.`
-                      : null}
-                    {escrow.status === 'refunded'
-                      ? isEnglish
-                        ? `The amount was refunded to the client${escrow.resolvedAt ? ` on ${escrow.resolvedAt}` : ''}.`
-                        : `تمت إعادة المبلغ إلى العميل${escrow.resolvedAt ? ` بتاريخ ${escrow.resolvedAt}` : ''}.`
-                      : null}
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      onClick={() => {
-                        const result = releaseEscrowToProvider(escrow.id);
-                        handleRefresh(result.message);
-                      }}
-                      disabled={!canRelease}
-                    >
-                      {isEnglish ? 'Release to provider' : 'تحويل لمقدم الخدمة'}
-                    </Button>
-
-                    <div
-                      className={`flex min-h-10 min-w-[190px] items-center justify-center rounded-md border px-4 text-sm font-medium ${getIssueStatusBox(
-                        escrow.status,
-                      )}`}
-                    >
-                      {getIssueStatusText(escrow.status, isEnglish)}
-                    </div>
-
-                    <Button
-                      variant="destructive"
-                      onClick={() => {
-                        const result = refundEscrowToClient(escrow.id);
-                        handleRefresh(result.message);
-                      }}
-                      disabled={!canRefund}
-                    >
-                      {isEnglish ? 'Refund client' : 'إعادة للعميل'}
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{isEnglish ? 'Site wallet log' : 'سجل محفظة الموقع'}</CardTitle>
-            <CardDescription>
-              {isEnglish
-                ? 'Every money movement related to reservation, release, or refund appears here.'
-                : 'كل حركة مالية مرتبطة بالحجز أو التحويل أو الإعادة تظهر هنا.'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {transactions.map((transaction) => (
-              <div
-                key={transaction.id}
-                className="flex flex-col gap-3 rounded-2xl border border-border p-4 md:flex-row md:items-center md:justify-between"
-              >
-                <div className="space-y-1">
-                  <p className="font-medium">{transaction.description}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {transaction.date} {isEnglish ? 'at' : 'عند'} {transaction.time}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <Badge variant="outline">
-                    {transaction.status === 'pending'
-                      ? isEnglish
-                        ? 'Pending'
-                        : 'معلّق'
-                      : isEnglish
-                        ? 'Completed'
-                        : 'مكتمل'}
-                  </Badge>
-                  <span
-                    className={`text-lg font-semibold ${
-                      transaction.amount >= 0 ? 'text-emerald-600' : 'text-foreground'
-                    }`}
-                  >
-                    {transaction.amount >= 0 ? '+' : ''}
-                    ${transaction.amount.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        <TransactionsTable
+          title={isEnglish ? 'Admin wallet transactions' : 'حركات محفظة الأدمن'}
+          description={
+            isEnglish
+              ? 'Revenue, commissions, and admin wallet transfers.'
+              : 'الأرباح والعمولات والتحويلات الخاصة بمحفظة الأدمن.'
+          }
+          transactions={adminTransactions}
+          loading={loading}
+          isEnglish={isEnglish}
+        />
       </div>
     </DashboardLayout>
+  );
+}
+
+function TransactionsTable({
+  title,
+  description,
+  transactions,
+  loading,
+  isEnglish,
+}: {
+  title: string;
+  description: string;
+  transactions: WalletTransaction[];
+  loading: boolean;
+  isEnglish: boolean;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="h-56 animate-pulse rounded-md bg-muted" />
+        ) : transactions.length === 0 ? (
+          <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+            {isEnglish ? 'No transactions yet.' : 'لا توجد حركات مالية بعد.'}
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{isEnglish ? 'Date' : 'التاريخ'}</TableHead>
+                <TableHead>{isEnglish ? 'Type' : 'النوع'}</TableHead>
+                <TableHead>{isEnglish ? 'Description' : 'الوصف'}</TableHead>
+                <TableHead>{isEnglish ? 'Amount' : 'المبلغ'}</TableHead>
+                <TableHead>{isEnglish ? 'Balance after' : 'الرصيد بعد العملية'}</TableHead>
+                <TableHead>{isEnglish ? 'Status' : 'الحالة'}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {transactions.map((transaction) => (
+                <TableRow key={transaction.id}>
+                  <TableCell>{formatDate(transaction.created_at, isEnglish)}</TableCell>
+                  <TableCell>{transactionTypeLabel(transaction.type, isEnglish)}</TableCell>
+                  <TableCell>{transaction.description || '-'}</TableCell>
+                  <TableCell
+                    className={
+                      transaction.direction === 'credit'
+                        ? 'font-semibold text-green-700'
+                        : 'font-semibold text-foreground'
+                    }
+                  >
+                    {transaction.direction === 'credit' ? '+' : '-'}
+                    {formatAmount(transaction.amount, isEnglish)}
+                  </TableCell>
+                  <TableCell>{formatAmount(transaction.balance_after, isEnglish)}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={
+                        transaction.status === 'completed'
+                          ? 'border-green-200 bg-green-50 text-green-700'
+                          : 'border-amber-200 bg-amber-50 text-amber-800'
+                      }
+                    >
+                      {transaction.status === 'completed' ? (
+                        <CheckCircle2 className="me-1 size-3" />
+                      ) : (
+                        <Clock className="me-1 size-3" />
+                      )}
+                      {statusLabel(transaction.status, isEnglish)}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   );
 }
