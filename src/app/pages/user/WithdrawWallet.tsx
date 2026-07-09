@@ -2,15 +2,36 @@ import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { AlertCircle, LoaderCircle, Wallet as WalletIcon } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '@/app/components/ui';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
-import { getMyWallet, withdrawFromWallet } from '@/app/api/endpoints';
+import { getMyWallet, requestWalletWithdraw } from '@/app/api/endpoints';
 import { useLanguage } from '@/app/providers/LanguageProvider';
+import { formatUsd, parsePositiveMoney, sanitizeMoneyInput } from '@/app/utils/money';
+import {
+  buildWalletRequestText,
+  DEFAULT_WALLET_PAYMENT_METHOD,
+  WALLET_PAYMENT_METHODS,
+  type WalletPaymentMethod,
+} from '@/app/utils/walletPaymentMethods';
 
 export default function WithdrawWallet() {
   const navigate = useNavigate();
   const { isEnglish, language } = useLanguage();
   const [amount, setAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<WalletPaymentMethod>(DEFAULT_WALLET_PAYMENT_METHOD);
   const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -36,40 +57,46 @@ export default function WithdrawWallet() {
     };
   }, []);
 
+  const handleAmountChange = (value: string) => {
+    const nextValue = sanitizeMoneyInput(value);
+    if (nextValue && Number(nextValue) === 0) {
+      setAmount('');
+      setError(isEnglish ? 'Amount cannot be zero.' : 'لا يمكن أن يكون المبلغ صفراً.');
+      return;
+    }
+    setAmount(nextValue);
+    setError('');
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isSubmitting) return;
 
-    const parsedAmount = Number(amount);
-    if (!Number.isFinite(parsedAmount) || parsedAmount < 1) {
-      setError(isEnglish ? 'Enter an amount of at least 1.' : 'أدخل مبلغاً لا يقل عن 1.');
+    const parsedAmount = parsePositiveMoney(amount);
+    if (parsedAmount === null || parsedAmount < 50) {
+      setError(isEnglish ? 'Minimum withdrawal amount is $50.' : 'الحد الأدنى للسحب هو $50.');
       return;
     }
 
-    if (!window.confirm(
-      isEnglish
-        ? 'Are you sure you want to withdraw this amount?'
-        : 'هل أنت متأكد من سحب هذا المبلغ؟',
-    )) {
+    if (balance !== null && parsedAmount > balance) {
+      setError(isEnglish ? 'Insufficient wallet balance.' : 'رصيد المحفظة غير كاف.');
       return;
     }
 
     try {
       setIsSubmitting(true);
       setError('');
-      await withdrawFromWallet(parsedAmount);
+      await requestWalletWithdraw(parsedAmount, buildWalletRequestText(paymentMethod, '', isEnglish));
       navigate('/wallet', {
         state: {
-          walletMessage: isEnglish
-            ? 'Amount withdrawn successfully.'
-            : 'تم سحب المبلغ بنجاح',
+          walletMessage: isEnglish ? 'Withdrawal request sent to admin.' : 'تم إرسال طلب السحب للأدمن.',
         },
       });
     } catch (requestError) {
       setError(
         getValidationErrors(requestError).amount?.[0] ||
           getApiErrorMessage(requestError) ||
-          (isEnglish ? 'Unable to complete withdrawal.' : 'تعذر تنفيذ عملية السحب'),
+          (isEnglish ? 'Unable to send withdrawal request.' : 'تعذر إرسال طلب السحب'),
       );
     } finally {
       setIsSubmitting(false);
@@ -97,7 +124,7 @@ export default function WithdrawWallet() {
                 ? isEnglish ? 'Loading balance...' : 'جاري تحميل الرصيد...'
                 : balance === null
                   ? isEnglish ? 'Balance unavailable' : 'الرصيد غير متاح'
-                  : `${isEnglish ? 'Current balance:' : 'الرصيد الحالي:'} ${balance.toFixed(2)}`}
+                  : `${isEnglish ? 'Current balance:' : 'الرصيد الحالي:'} ${formatUsd(balance, isEnglish ? 'en' : 'ar')}`}
             </p>
           </CardHeader>
           <CardContent>
@@ -106,17 +133,33 @@ export default function WithdrawWallet() {
                 <Label htmlFor="withdraw-amount">{isEnglish ? 'Amount' : 'المبلغ'}</Label>
                 <Input
                   id="withdraw-amount"
-                  type="number"
-                  min="1"
-                  step="0.01"
+                  type="text"
                   inputMode="decimal"
                   value={amount}
-                  onChange={(event) => {
-                    setAmount(event.target.value);
-                    setError('');
-                  }}
+                  onChange={(event) => handleAmountChange(event.target.value)}
+                  placeholder="$50.00"
                   disabled={loading || isSubmitting}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="withdraw-method">{isEnglish ? 'Withdrawal method' : 'طريقة السحب'}</Label>
+                <Select
+                  value={paymentMethod}
+                  onValueChange={(value) => setPaymentMethod(value as WalletPaymentMethod)}
+                  disabled={loading || isSubmitting}
+                >
+                  <SelectTrigger id="withdraw-method">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WALLET_PAYMENT_METHODS.map((method) => (
+                      <SelectItem key={method.value} value={method.value}>
+                        {isEnglish ? method.labelEn : method.labelAr}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {error ? (
                   <p className="flex items-center gap-2 text-sm text-destructive">
                     <AlertCircle className="size-4" />
@@ -128,8 +171,8 @@ export default function WithdrawWallet() {
               <Button type="submit" disabled={loading || isSubmitting || balance === null}>
                 {isSubmitting ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
                 {isSubmitting
-                  ? isEnglish ? 'Withdrawing...' : 'جاري تنفيذ عملية السحب...'
-                  : isEnglish ? 'Confirm withdrawal' : 'تأكيد السحب'}
+                  ? isEnglish ? 'Sending request...' : 'جاري إرسال الطلب...'
+                  : isEnglish ? 'Send withdrawal request' : 'إرسال طلب السحب'}
               </Button>
             </form>
           </CardContent>

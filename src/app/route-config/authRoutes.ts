@@ -8,6 +8,7 @@ const Register = lazyPage(() => import('@/app/pages/auth/Register'));
 const Terms = lazyPage(() => import('@/app/pages/public/Terms'));
 const EmailVerification = lazyPage(() => import('@/app/pages/auth/EmailVerification'));
 const ForgotPassword = lazyPage(() => import('@/app/pages/auth/ForgotPassword'));
+const ResetPassword = lazyPage(() => import('@/app/pages/auth/ResetPassword'));
 
 export const authRoutes = [
   { path: '/', Component: Landing },
@@ -18,4 +19,5 @@ export const authRoutes = [
   { path: '/terms', Component: Terms },
   { path: '/verify-email', Component: EmailVerification },
   { path: '/forgot-password', Component: ForgotPassword },
+  { path: '/reset-password', Component: ResetPassword },
 ];

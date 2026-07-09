@@ -25,8 +25,15 @@ import {
   TableRow,
 } from '@/app/components/ui';
 import { getApiErrorMessage } from '@/app/api/client';
-import { getMyWallet, type Wallet, type WalletTransaction } from '@/app/api/endpoints';
+import {
+  getMyWallet,
+  getMyWalletRequests,
+  type Wallet,
+  type WalletRequest,
+  type WalletTransaction,
+} from '@/app/api/endpoints';
 import { useLanguage } from '@/app/providers/LanguageProvider';
+import { formatUsd } from '@/app/utils/money';
 
 function safeAmount(value: number | string) {
   const parsed = Number(value);
@@ -36,10 +43,7 @@ function safeAmount(value: number | string) {
 function formatAmount(value: number | string, isEnglish: boolean) {
   const amount = safeAmount(value);
   if (amount === null) return isEnglish ? 'Unavailable' : 'غير متاح';
-  return new Intl.NumberFormat(isEnglish ? 'en' : 'ar', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+  return formatUsd(amount, isEnglish ? 'en' : 'ar');
 }
 
 function transactionTypeLabel(type: string, isEnglish: boolean) {
@@ -69,6 +73,7 @@ export default function WalletPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [walletRequests, setWalletRequests] = useState<WalletRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMessage] = useState(
@@ -79,9 +84,15 @@ export default function WalletPage() {
     setLoading(true);
     setError('');
     try {
-      setWallet(await getMyWallet());
+      const [walletResponse, requestsResponse] = await Promise.all([
+        getMyWallet(),
+        getMyWalletRequests(),
+      ]);
+      setWallet(walletResponse);
+      setWalletRequests(requestsResponse.data);
     } catch (requestError) {
       setWallet(null);
+      setWalletRequests([]);
       setError(
         getApiErrorMessage(requestError) ||
           (isEnglish
@@ -206,6 +217,43 @@ export default function WalletPage() {
                 </CardContent>
               </Card>
             </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{isEnglish ? 'Wallet requests' : 'طلبات المحفظة'}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!walletRequests.length ? (
+                  <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    {isEnglish ? 'No wallet requests yet.' : 'لا توجد طلبات محفظة حتى الآن.'}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {walletRequests.slice(0, 5).map((request) => (
+                      <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
+                        <div>
+                          <div className="font-medium">
+                            {request.type === 'deposit'
+                              ? isEnglish ? 'Deposit request' : 'طلب شحن'
+                              : isEnglish ? 'Withdrawal request' : 'طلب سحب'}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {formatAmount(request.amount, isEnglish)}
+                          </div>
+                        </div>
+                        <Badge variant="outline">
+                          {request.status === 'pending'
+                            ? isEnglish ? 'Pending' : 'قيد المراجعة'
+                            : request.status === 'approved'
+                              ? isEnglish ? 'Approved' : 'مقبول'
+                              : isEnglish ? 'Rejected' : 'مرفوض'}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             <Card>
               <CardHeader>

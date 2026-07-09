@@ -27,6 +27,7 @@ import {
   getAdminWallets,
   getEscrowTransactionsWallet,
 } from '@/app/api/endpoints';
+import { formatUsd } from '@/app/utils/money';
 
 function toAmount(value: number | string | null | undefined) {
   const amount = Number(value);
@@ -34,10 +35,7 @@ function toAmount(value: number | string | null | undefined) {
 }
 
 function formatAmount(value: number | string | null | undefined, isEnglish: boolean) {
-  return new Intl.NumberFormat(isEnglish ? 'en' : 'ar', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(toAmount(value));
+  return formatUsd(toAmount(value), isEnglish ? 'en' : 'ar');
 }
 
 function formatDate(value: string | undefined, isEnglish: boolean) {
@@ -204,6 +202,7 @@ export default function AdminFinance() {
           ))}
         </div>
 
+        <div className="grid gap-4 lg:grid-cols-2">
         <Card className="border-primary/20 bg-primary/5">
           <CardHeader>
             <CardTitle>{isEnglish ? 'Escrow wallet' : 'محفظة الوسيط'}</CardTitle>
@@ -222,6 +221,26 @@ export default function AdminFinance() {
             </Button>
           </CardContent>
         </Card>
+
+        <Card className="border-primary/20 bg-primary/5">
+          <CardHeader>
+            <CardTitle>{isEnglish ? 'Wallet requests' : 'طلبات المحفظة'}</CardTitle>
+            <CardDescription>
+              {isEnglish
+                ? 'Approve or reject user and company deposit and withdrawal requests.'
+                : 'اقبل أو ارفض طلبات الشحن والسحب للمستخدمين والشركات.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link to="/admin/wallet-requests">
+                <WalletIcon className="me-2 size-4" />
+                {isEnglish ? 'Open wallet requests' : 'فتح طلبات المحفظة'}
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+        </div>
 
         <div className="grid gap-6 xl:grid-cols-2">
           <TransactionsCard

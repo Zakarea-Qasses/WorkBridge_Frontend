@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BriefcaseBusiness, FileText, LoaderCircle, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { BriefcaseBusiness, FileText, LoaderCircle, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import {
@@ -21,16 +21,21 @@ import { getApiErrorMessage } from '@/app/api/client';
 import {
   AdminContentStatus,
   AdminContentType,
+  Category,
   JobPost,
   PaginatedResponse,
   Service,
   UserProject,
+  createAdminContentCategory,
+  deleteAdminContentCategory,
   deleteAdminContentJob,
   deleteAdminContentProject,
   deleteAdminContentService,
+  getAdminContentCategories,
   getAdminContentJobs,
   getAdminContentProjects,
   getAdminContentServices,
+  updateAdminContentCategory,
   updateAdminJobStatus,
   updateAdminProjectStatus,
   updateAdminServiceStatus,
@@ -39,15 +44,17 @@ import {
 type StatusFilter = 'all' | AdminContentStatus;
 type Feedback = { type: 'success' | 'error'; message: string } | null;
 type AdminContentItem = UserProject | Service | JobPost;
+type AdminContentTab = AdminContentType | 'categories';
 
 const contentTypes: Array<{
-  value: AdminContentType;
+  value: AdminContentTab;
   labelAr: string;
   labelEn: string;
 }> = [
   { value: 'projects', labelAr: 'المشاريع', labelEn: 'Projects' },
   { value: 'services', labelAr: 'الخدمات', labelEn: 'Services' },
   { value: 'jobs', labelAr: 'الوظائف', labelEn: 'Jobs' },
+  { value: 'categories', labelAr: 'التصنيفات', labelEn: 'Categories' },
 ];
 
 const statusOptions: Array<{ value: AdminContentStatus; labelAr: string; labelEn: string }> = [
@@ -144,12 +151,16 @@ function getContentDescription(item: AdminContentItem) {
 
 export default function AdminProjects() {
   const { language, isEnglish } = useLanguage();
-  const [activeType, setActiveType] = useState<AdminContentType>('projects');
+  const [activeType, setActiveType] = useState<AdminContentTab>('projects');
   const [items, setItems] = useState<AdminContentItem[]>([]);
   const [pagination, setPagination] = useState<PaginatedResponse<AdminContentItem> | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [categoryName, setCategoryName] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [actingKey, setActingKey] = useState<string | null>(null);
@@ -174,6 +185,14 @@ export default function AdminProjects() {
     setFeedback(null);
 
     try {
+      if (activeType === 'categories') {
+        const response = await getAdminContentCategories();
+        setCategories(response);
+        setItems([]);
+        setPagination(null);
+        return;
+      }
+
       const params = {
         page,
         search: debouncedSearch || undefined,
@@ -190,6 +209,7 @@ export default function AdminProjects() {
       setItems(response.data as AdminContentItem[]);
     } catch (error) {
       setItems([]);
+      setCategories([]);
       setPagination(null);
       setFeedback({ type: 'error', message: getApiErrorMessage(error) });
     } finally {
@@ -201,10 +221,14 @@ export default function AdminProjects() {
     loadContent();
   }, [activeType, debouncedSearch, statusFilter, page]);
 
-  const resetForType = (type: AdminContentType) => {
+  const resetForType = (type: AdminContentTab) => {
     setActiveType(type);
     setPage(1);
     setFeedback(null);
+    setSearch('');
+    setStatusFilter('all');
+    setEditingCategoryId(null);
+    setEditingCategoryName('');
   };
 
   const updateStatus = async (item: AdminContentItem, status: AdminContentStatus) => {
@@ -262,6 +286,92 @@ export default function AdminProjects() {
       setFeedback({
         type: 'success',
         message: isEnglish ? 'Post deleted successfully.' : 'تم حذف المنشور بنجاح.',
+      });
+      await loadContent();
+    } catch (error) {
+      setFeedback({ type: 'error', message: getApiErrorMessage(error) });
+    } finally {
+      setActingKey(null);
+    }
+  };
+
+  const createCategory = async () => {
+    const name = categoryName.trim();
+    if (!name) {
+      setFeedback({
+        type: 'error',
+        message: isEnglish ? 'Enter category name.' : 'أدخل اسم التصنيف.',
+      });
+      return;
+    }
+
+    try {
+      setActingKey('category-create');
+      setFeedback(null);
+      await createAdminContentCategory(name);
+      setCategoryName('');
+      setFeedback({
+        type: 'success',
+        message: isEnglish ? 'Category created successfully.' : 'تم إنشاء التصنيف بنجاح.',
+      });
+      await loadContent();
+    } catch (error) {
+      setFeedback({ type: 'error', message: getApiErrorMessage(error) });
+    } finally {
+      setActingKey(null);
+    }
+  };
+
+  const startEditCategory = (category: Category) => {
+    setEditingCategoryId(category.id);
+    setEditingCategoryName(category.name);
+    setFeedback(null);
+  };
+
+  const updateCategory = async (category: Category) => {
+    const name = editingCategoryName.trim();
+    if (!name) {
+      setFeedback({
+        type: 'error',
+        message: isEnglish ? 'Enter category name.' : 'أدخل اسم التصنيف.',
+      });
+      return;
+    }
+
+    try {
+      setActingKey(`category-${category.id}-update`);
+      setFeedback(null);
+      await updateAdminContentCategory(category.id, name);
+      setEditingCategoryId(null);
+      setEditingCategoryName('');
+      setFeedback({
+        type: 'success',
+        message: isEnglish ? 'Category updated successfully.' : 'تم تحديث التصنيف بنجاح.',
+      });
+      await loadContent();
+    } catch (error) {
+      setFeedback({ type: 'error', message: getApiErrorMessage(error) });
+    } finally {
+      setActingKey(null);
+    }
+  };
+
+  const deleteCategory = async (category: Category) => {
+    const confirmed = window.confirm(
+      isEnglish
+        ? `Delete category "${category.name}"?`
+        : `هل تريد حذف التصنيف "${category.name}"؟`,
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setActingKey(`category-${category.id}-delete`);
+      setFeedback(null);
+      await deleteAdminContentCategory(category.id);
+      setFeedback({
+        type: 'success',
+        message: isEnglish ? 'Category deleted successfully.' : 'تم حذف التصنيف بنجاح.',
       });
       await loadContent();
     } catch (error) {
@@ -338,6 +448,7 @@ export default function AdminProjects() {
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
+            {activeType !== 'categories' ? (
             <div className="grid gap-3 lg:grid-cols-[1fr_260px]">
               <div className="relative">
                 <Search className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground ltr:left-3 rtl:right-3" />
@@ -370,6 +481,7 @@ export default function AdminProjects() {
                 </SelectContent>
               </Select>
             </div>
+            ) : null}
 
             {loading ? (
               <div className="flex min-h-44 items-center justify-center gap-2 rounded-lg border border-dashed text-sm text-muted-foreground">
@@ -378,7 +490,115 @@ export default function AdminProjects() {
               </div>
             ) : null}
 
-            {!loading && items.length === 0 ? (
+            {!loading && activeType === 'categories' ? (
+              <div className="space-y-4">
+                <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-[1fr_auto]">
+                  <Input
+                    value={categoryName}
+                    onChange={(event) => setCategoryName(event.target.value)}
+                    placeholder={isEnglish ? 'New category name' : 'اسم التصنيف الجديد'}
+                    disabled={actingKey === 'category-create'}
+                  />
+                  <Button onClick={() => void createCategory()} disabled={actingKey === 'category-create'}>
+                    {actingKey === 'category-create' ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="h-4 w-4" />
+                    )}
+                    {isEnglish ? 'Add category' : 'إضافة تصنيف'}
+                  </Button>
+                </div>
+
+                {categories.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    {isEnglish ? 'No categories found.' : 'لا توجد تصنيفات.'}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {categories.map((category) => {
+                      const isEditing = editingCategoryId === category.id;
+                      return (
+                        <Card key={category.id}>
+                          <CardContent className="flex flex-col gap-3 pt-6 md:flex-row md:items-center md:justify-between">
+                            <div className="min-w-0 flex-1">
+                              {isEditing ? (
+                                <Input
+                                  value={editingCategoryName}
+                                  onChange={(event) => setEditingCategoryName(event.target.value)}
+                                  autoFocus
+                                />
+                              ) : (
+                                <>
+                                  <h3 className="font-semibold">{category.name}</h3>
+                                  <p className="text-sm text-muted-foreground">
+                                    {isEnglish ? 'Category ID' : 'رقم التصنيف'}: {category.id}
+                                  </p>
+                                </>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                              {isEditing ? (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    disabled={actingKey !== null}
+                                    onClick={() => void updateCategory(category)}
+                                  >
+                                    {actingKey === `category-${category.id}-update` ? (
+                                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                                    ) : null}
+                                    {isEnglish ? 'Save' : 'حفظ'}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={actingKey !== null}
+                                    onClick={() => {
+                                      setEditingCategoryId(null);
+                                      setEditingCategoryName('');
+                                    }}
+                                  >
+                                    {isEnglish ? 'Cancel' : 'إلغاء'}
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={actingKey !== null}
+                                    onClick={() => startEditCategory(category)}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                    {isEnglish ? 'Edit' : 'تعديل'}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    disabled={actingKey !== null}
+                                    onClick={() => void deleteCategory(category)}
+                                  >
+                                    {actingKey === `category-${category.id}-delete` ? (
+                                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" />
+                                    )}
+                                    {isEnglish ? 'Delete' : 'حذف'}
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {!loading && activeType !== 'categories' && items.length === 0 ? (
               <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
                 {isEnglish
                   ? 'No content matches the current filters.'
@@ -386,7 +606,7 @@ export default function AdminProjects() {
               </div>
             ) : null}
 
-            {!loading && items.length > 0 ? (
+            {!loading && activeType !== 'categories' && items.length > 0 ? (
               <div className="space-y-4">
                 {items.map((item) => {
                   const currentStatus = (item.status || 'active') as AdminContentStatus;

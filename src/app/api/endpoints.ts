@@ -26,6 +26,8 @@ export interface LoginResponse {
 export interface Category {
   id: number;
   name: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface LocationOption {
@@ -83,6 +85,48 @@ export interface PersonalDashboardResponse {
   message: string;
   role: 'personal';
   user: WorkBridgeUser;
+  stats: {
+    total_projects: number;
+    active_projects: number;
+    total_services: number;
+    active_services: number;
+    project_applications_sent: number;
+    project_applications_received: number;
+    job_applications_sent: number;
+    service_requests_sent: number;
+    service_requests_received: number;
+    active_contracts: number;
+    completed_contracts: number;
+    pending_wallet_requests: number;
+    wallet_balance: number | string;
+    rating_avg: number | string;
+  };
+  recent_projects: Array<{
+    id: number;
+    title: string;
+    budget: number | string;
+    duration_days: number;
+    status: string;
+    category_name: string | null;
+    created_at: string;
+  }>;
+  active_contracts: Array<{
+    id: number;
+    title: string | null;
+    amount: number | string;
+    status: string;
+    client_name: string | null;
+    freelancer_name: string | null;
+    created_at: string;
+  }>;
+  recent_activity: Array<{
+    id: string;
+    type: string;
+    title: string;
+    status: string;
+    amount: number | string | null;
+    created_at: string;
+  }>;
 }
 
 export interface CompanyDashboardResponse {
@@ -323,6 +367,28 @@ export interface Wallet {
   updated_at: string;
   transactions: WalletTransaction[];
   user?: Pick<WorkBridgeUser, 'id' | 'name' | 'email'> | null;
+}
+
+export type WalletRequestType = 'deposit' | 'withdraw';
+export type WalletRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface WalletRequest {
+  id: number;
+  user_id: number;
+  type: WalletRequestType;
+  amount: number | string;
+  status: WalletRequestStatus;
+  payment_note: string | null;
+  deposit_receipt_path: string | null;
+  deposit_receipt_url: string | null;
+  withdrawal_details: string | null;
+  admin_note: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  user?: Pick<WorkBridgeUser, 'id' | 'name' | 'email' | 'role' | 'status'> | null;
+  reviewer?: Pick<WorkBridgeUser, 'id' | 'name' | 'email'> | null;
 }
 
 export interface WalletOperationResponse {
@@ -569,6 +635,25 @@ export function register(payload: {
 
 export function verifyEmail(payload: { email: string; otp: string }) {
   return apiRequest<{ message: string }>('/email/verify', {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function forgotPassword(payload: { email: string }) {
+  return apiRequest<{ message: string }>('/forgot-password', {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function resetPassword(payload: {
+  token: string;
+  email: string;
+  password: string;
+  password_confirmation: string;
+}) {
+  return apiRequest<{ message: string }>('/reset-password', {
     method: 'POST',
     body: payload,
   });
@@ -922,6 +1007,37 @@ export async function applyToProject(
   return response.application;
 }
 
+export async function getMyProjectApplications(page = 1) {
+  const response = await apiRequest<{ applications: PaginatedResponse<ProjectApplication> }>(
+    `/applications/my?page=${page}`,
+  );
+  return response.applications;
+}
+
+export async function getReceivedProjectApplications(page = 1) {
+  const response = await apiRequest<{ applications: PaginatedResponse<ProjectApplication> }>(
+    `/applications/received?page=${page}`,
+  );
+  return response.applications;
+}
+
+export async function acceptProjectApplication(id: string | number) {
+  const response = await apiRequest<{
+    message: string;
+    application: ProjectApplication;
+    contract?: Contract;
+  }>(`/applications/${id}/accept`, { method: 'POST' });
+  return response.application;
+}
+
+export async function rejectProjectApplication(id: string | number) {
+  const response = await apiRequest<{
+    message: string;
+    application: ProjectApplication;
+  }>(`/applications/${id}/reject`, { method: 'POST' });
+  return response.application;
+}
+
 export async function getProfile() {
   return apiRequest<PersonalProfileResponse>('/profile');
 }
@@ -1155,6 +1271,13 @@ export async function getMyWallet() {
   return response.wallet;
 }
 
+export async function getMyWalletRequests(page = 1) {
+  const response = await apiRequest<{ status: boolean; requests: PaginatedResponse<WalletRequest> }>(
+    `/wallet/requests?page=${page}`,
+  );
+  return response.requests;
+}
+
 export async function getAdminWallets() {
   const response = await apiRequest<{ status: boolean; wallets: Wallet[] }>('/admin/wallets');
   return response.wallets;
@@ -1174,18 +1297,66 @@ export async function getAdminEarnings() {
   return apiRequest<AdminEarningsResponse>('/admin/earnings');
 }
 
-export function depositWallet(amount: number) {
-  return apiRequest<WalletOperationResponse>(
-    '/wallet/deposit',
-    { method: 'POST', body: { amount } },
+export async function requestWalletDeposit(
+  amount: number,
+  payment_note?: string | null,
+  deposit_receipt?: File | null,
+  deposit_proof?: string | null,
+) {
+  const body = new FormData();
+  body.append('amount', String(amount));
+  if (payment_note) body.append('payment_note', payment_note);
+  if (deposit_proof) body.append('deposit_proof', deposit_proof);
+  if (deposit_receipt) body.append('deposit_receipt', deposit_receipt);
+
+  const response = await apiRequest<{ status: boolean; message: string; request: WalletRequest }>(
+    '/wallet/deposit-requests',
+    { method: 'POST', body },
   );
+  return response.request;
 }
 
-export function withdrawFromWallet(amount: number) {
-  return apiRequest<WalletOperationResponse>('/wallet/withdraw', {
-    method: 'POST',
-    body: { amount },
+export async function requestWalletWithdraw(amount: number, withdrawal_details: string) {
+  const response = await apiRequest<{ status: boolean; message: string; request: WalletRequest }>(
+    '/wallet/withdraw-requests',
+    { method: 'POST', body: { amount, withdrawal_details } },
+  );
+  return response.request;
+}
+
+export async function getAdminWalletRequests(params?: {
+  page?: number;
+  type?: WalletRequestType | '';
+  status?: WalletRequestStatus | '';
+  search?: string;
+}) {
+  const query = new URLSearchParams();
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      query.set(key, String(value));
+    }
   });
+
+  const response = await apiRequest<{ status: boolean; requests: PaginatedResponse<WalletRequest> }>(
+    `/admin/wallet-requests${query.toString() ? `?${query.toString()}` : ''}`,
+  );
+  return response.requests;
+}
+
+export async function approveWalletRequest(id: string | number, admin_note?: string | null) {
+  const response = await apiRequest<{ status: boolean; message: string; request: WalletRequest }>(
+    `/admin/wallet-requests/${id}/approve`,
+    { method: 'POST', body: { admin_note } },
+  );
+  return response.request;
+}
+
+export async function rejectWalletRequest(id: string | number, admin_note?: string | null) {
+  const response = await apiRequest<{ status: boolean; message: string; request: WalletRequest }>(
+    `/admin/wallet-requests/${id}/reject`,
+    { method: 'POST', body: { admin_note } },
+  );
+  return response.request;
 }
 
 export function transferWalletToAdmin(amount: number) {
@@ -1367,4 +1538,31 @@ export function deleteAdminContentService(id: string | number) {
 
 export function deleteAdminContentJob(id: string | number) {
   return apiRequest(`/admin/content/jobs/${id}`, { method: 'DELETE' });
+}
+
+export async function getAdminContentCategories() {
+  const response = await apiRequest<{ categories: Category[] }>('/admin/content/categories');
+  return response.categories;
+}
+
+export async function createAdminContentCategory(name: string) {
+  const response = await apiRequest<{ message: string; category: Category }>(
+    '/admin/content/categories',
+    { method: 'POST', body: { name } },
+  );
+  return response.category;
+}
+
+export async function updateAdminContentCategory(id: string | number, name: string) {
+  const response = await apiRequest<{ message: string; category: Category }>(
+    `/admin/content/categories/${id}`,
+    { method: 'PUT', body: { name } },
+  );
+  return response.category;
+}
+
+export function deleteAdminContentCategory(id: string | number) {
+  return apiRequest<{ message: string }>(`/admin/content/categories/${id}`, {
+    method: 'DELETE',
+  });
 }

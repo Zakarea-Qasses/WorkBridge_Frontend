@@ -186,6 +186,7 @@ export default function DashboardLayout({
       { icon: FileText, label: isEnglish ? 'Reports Center' : 'مركز التقارير', path: '/admin/reports' },
       { icon: FileText, label: isEnglish ? 'Content Management' : 'إدارة المحتوى', path: '/admin/projects' },
       { icon: Wallet, label: isEnglish ? 'Finance Management' : 'الإدارة المالية', path: '/admin/finance' },
+      { icon: Wallet, label: isEnglish ? 'Wallet Requests' : 'طلبات المحفظة', path: '/admin/wallet-requests' },
       { icon: Wallet, label: isEnglish ? 'Site Wallet' : 'محفظة الموقع', path: '/admin/site-wallet' },
       { icon: Bell, label: isEnglish ? 'Notifications' : 'الإشعارات', path: '/admin/notifications' },
       { icon: Settings, label: isEnglish ? 'Settings' : 'الإعدادات', path: '/admin/settings' },

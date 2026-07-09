@@ -32,6 +32,7 @@ import {
   getAdminTransactionsWallet,
   getEscrowTransactionsWallet,
 } from '@/app/api/endpoints';
+import { formatUsd } from '@/app/utils/money';
 
 function toAmount(value: number | string | null | undefined) {
   const amount = Number(value);
@@ -39,10 +40,7 @@ function toAmount(value: number | string | null | undefined) {
 }
 
 function formatAmount(value: number | string | null | undefined, isEnglish: boolean) {
-  return new Intl.NumberFormat(isEnglish ? 'en' : 'ar', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(toAmount(value));
+  return formatUsd(toAmount(value), isEnglish ? 'en' : 'ar');
 }
 
 function formatDate(value: string | undefined, isEnglish: boolean) {
