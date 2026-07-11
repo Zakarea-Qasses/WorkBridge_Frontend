@@ -133,7 +133,7 @@ export default function WalletPage() {
             <p className="mt-1 text-muted-foreground">
               {isEnglish
                 ? 'Your real balance and financial transactions.'
-                : 'رصيدك الحقيقي وحركاتك المالية.'}
+                : 'الرصيد و الحركات المالية'}
             </p>
           </div>
           <Button variant="outline" disabled={loading} onClick={() => void loadWallet()}>
@@ -183,7 +183,7 @@ export default function WalletPage() {
                 <WalletIcon className="size-5" />
                 <span className="text-sm">
                   {isEnglish
-                    ? 'Balance confirmed by the backend'
+                    ? 'Available balance'
                     : 'الرصيد المعتمد من النظام'}
                 </span>
               </CardContent>

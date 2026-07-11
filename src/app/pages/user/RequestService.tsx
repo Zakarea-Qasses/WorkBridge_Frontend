@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { LoaderCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, LoaderCircle } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from '@/app/components/ui';
 import { ApiError, getApiErrorMessage, getValidationErrors } from '@/app/api/client';
@@ -29,6 +29,7 @@ export default function RequestService() {
   const navigate = useNavigate();
   const { user, isCompany } = useAuth();
   const { isEnglish, language } = useLanguage();
+  const BackIcon = isEnglish ? ArrowLeft : ArrowRight;
   const [service, setService] = useState<Service | null>(null);
   const [existingRequest, setExistingRequest] = useState<ServiceRequest | null>(null);
   const [form, setForm] = useState({ title: '', description: '', references: '', delivery_days: '' });
@@ -95,10 +96,32 @@ export default function RequestService() {
     }
   };
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate(isCompany ? '/company/services' : '/services');
+  };
+
   return (
     <DashboardLayout userType={isCompany ? 'company' : 'user'}>
       <div className="mx-auto max-w-4xl space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <div><h1 className="text-3xl font-bold">{isEnglish ? 'Request Service' : 'طلب خدمة'}</h1></div>
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={handleBack}
+            aria-label={isEnglish ? 'Back' : 'رجوع'}
+            title={isEnglish ? 'Back' : 'رجوع'}
+            className="shrink-0"
+          >
+            <BackIcon className="h-4 w-4" />
+          </Button>
+        </div>
         {loading ? <div className="h-64 animate-pulse rounded-lg bg-muted" /> : !service ? (
           <Card><CardContent className="py-12 text-center"><p>{message}</p><Button asChild className="mt-4"><Link to={isCompany ? '/company/services' : '/services'}>{isEnglish ? 'Back to services' : 'العودة إلى الخدمات'}</Link></Button></CardContent></Card>
         ) : service.user_id === user?.id ? (

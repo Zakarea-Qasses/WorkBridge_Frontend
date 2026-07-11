@@ -1,18 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { AlertTriangle, Building2, FileText, LoaderCircle, RefreshCw, Users, Wallet } from 'lucide-react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import {
@@ -33,13 +21,6 @@ function formatAmount(value: number | string | null | undefined, isEnglish: bool
   return new Intl.NumberFormat(isEnglish ? 'en' : 'ar', {
     maximumFractionDigits: 2,
   }).format(amount);
-}
-
-function formatCompact(value: number | string) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return String(value);
-  if (amount >= 1000) return `${Math.round(amount / 1000)}k`;
-  return String(amount);
 }
 
 function formatDate(value: string | undefined, isEnglish: boolean) {
@@ -83,8 +64,6 @@ function typeLabel(type: string, isEnglish: boolean) {
 
   return labels[type]?.[isEnglish ? 0 : 1] || type.replaceAll('_', ' ');
 }
-
-const sharedAxisStyle = { fontSize: 12 };
 
 export default function AdminDashboard() {
   const { language, isEnglish } = useLanguage();
@@ -137,9 +116,6 @@ export default function AdminDashboard() {
     },
   ];
 
-  const revenueData = dashboard?.charts.monthly_revenue || [];
-  const usersData = dashboard?.charts.users_growth || [];
-
   return (
     <DashboardLayout userType="admin">
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
@@ -149,11 +125,6 @@ export default function AdminDashboard() {
               <h2 className="text-3xl font-bold">
                 {isEnglish ? 'Admin dashboard' : 'لوحة تحكم الأدمن'}
               </h2>
-              <p className="mt-2 opacity-80">
-                {isEnglish
-                  ? 'Real platform overview loaded from the backend.'
-                  : 'نظرة عامة حقيقية على المنصة محملة من الباك.'}
-              </p>
             </div>
             <Button variant="secondary" disabled={loading} onClick={() => void loadDashboard()}>
               <RefreshCw className={`me-2 size-4 ${loading ? 'animate-spin' : ''}`} />
@@ -183,80 +154,6 @@ export default function AdminDashboard() {
               <CardContent className="text-sm text-muted-foreground">{stat.note}</CardContent>
             </Card>
           ))}
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-2">
-          <Card className="overflow-hidden">
-            <CardHeader>
-              <CardTitle>{isEnglish ? 'Monthly revenue' : 'الإيرادات الشهرية'}</CardTitle>
-              <CardDescription>
-                {isEnglish ? 'Admin wallet revenue over the last months.' : 'إيرادات محفظة الأدمن خلال آخر الأشهر.'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="px-4 pb-5 sm:px-6">
-              {loading ? (
-                <div className="h-80 animate-pulse rounded-md bg-muted" />
-              ) : revenueData.length === 0 ? (
-                <div className="flex h-80 items-center justify-center text-sm text-muted-foreground">
-                  {isEnglish ? 'No revenue data available.' : 'لا توجد بيانات إيرادات.'}
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={revenueData} margin={{ top: 12, right: 28, left: 52, bottom: 12 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" tickMargin={14} minTickGap={20} tick={sharedAxisStyle} />
-                    <YAxis
-                      width={80}
-                      tickMargin={16}
-                      tickFormatter={(value) => formatCompact(value)}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={sharedAxisStyle}
-                    />
-                    <Tooltip formatter={(value) => formatAmount(String(value), isEnglish)} />
-                    <Legend wrapperStyle={{ paddingTop: 14 }} />
-                    <Bar dataKey="total" name={isEnglish ? 'Revenue' : 'الإيرادات'} fill="#1E3A8A" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="overflow-hidden">
-            <CardHeader>
-              <CardTitle>{isEnglish ? 'User growth' : 'نمو المستخدمين'}</CardTitle>
-              <CardDescription>
-                {isEnglish ? 'Cumulative registered users from backend.' : 'النمو التراكمي للمستخدمين من الباك.'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="px-4 pb-5 sm:px-6">
-              {loading ? (
-                <div className="h-80 animate-pulse rounded-md bg-muted" />
-              ) : usersData.length === 0 ? (
-                <div className="flex h-80 items-center justify-center text-sm text-muted-foreground">
-                  {isEnglish ? 'No user data available.' : 'لا توجد بيانات مستخدمين.'}
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={320}>
-                  <LineChart data={usersData} margin={{ top: 12, right: 28, left: 52, bottom: 12 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" tickMargin={14} minTickGap={20} tick={sharedAxisStyle} />
-                    <YAxis
-                      width={80}
-                      tickMargin={16}
-                      tickFormatter={(value) => formatCompact(value)}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={sharedAxisStyle}
-                    />
-                    <Tooltip formatter={(value) => Number(value).toLocaleString(isEnglish ? 'en' : 'ar')} />
-                    <Legend wrapperStyle={{ paddingTop: 14 }} />
-                    <Line type="monotone" dataKey="count" name={isEnglish ? 'Users' : 'المستخدمون'} stroke="#2563eb" strokeWidth={3} />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.3fr_0.9fr]">
@@ -330,7 +227,7 @@ export default function AdminDashboard() {
               <div>
                 <CardTitle>{isEnglish ? 'Company verification requests' : 'طلبات توثيق الشركات'}</CardTitle>
                 <CardDescription>
-                  {isEnglish ? 'Latest companies from backend.' : 'آخر الشركات من الباك.'}
+                  {isEnglish ? 'Latest companies.' : 'آخر الشركات.'}
                 </CardDescription>
               </div>
               <Button asChild variant="outline">
@@ -362,7 +259,7 @@ export default function AdminDashboard() {
               <div>
                 <CardTitle>{isEnglish ? 'Content needing review' : 'محتوى للمراجعة'}</CardTitle>
                 <CardDescription>
-                  {isEnglish ? 'Recent projects, services, and jobs from backend.' : 'أحدث المشاريع والخدمات والوظائف من الباك.'}
+                  {isEnglish ? 'Recent projects, services, and jobs.' : 'أحدث المشاريع والخدمات والوظائف.'}
                 </CardDescription>
               </div>
               <Button asChild variant="outline">

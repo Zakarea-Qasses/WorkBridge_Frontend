@@ -3,7 +3,6 @@ import { Link, Navigate } from 'react-router';
 import {
   AlertTriangle,
   BriefcaseBusiness,
-  Building2,
   CheckCircle2,
   Clock,
   FileText,
@@ -330,7 +329,6 @@ export default function CompanyDashboard() {
   const dashboardUser = dashboard?.user;
   const company = companyProfile || dashboardUser?.company;
   const companyName = company?.company_name || dashboardUser?.name || (isEnglish ? 'Company' : 'الشركة');
-  const isVerified = company?.is_verified === true;
 
   const summaryCards = useMemo(
     () => [
@@ -385,33 +383,16 @@ export default function CompanyDashboard() {
               <h2 className="text-3xl font-bold">
                 {isEnglish ? `Welcome, ${companyName}` : `مرحبا، ${companyName}`}
               </h2>
-              <p className="mt-2 text-primary-foreground/80">
-                {dashboard?.message ||
-                  (isEnglish
-                    ? 'Company dashboard data is loaded from the backend.'
-                    : 'تم تحميل بيانات لوحة الشركة من الباك.')}
-              </p>
             </div>
-            <div className="space-y-2 text-left">
+            <div className="flex flex-wrap items-center gap-3 sm:justify-end">
               <Badge className="border-white/20 bg-white/10 px-4 py-1 text-white">
                 {getRoleLabel(dashboard?.role || dashboardUser?.role, isEnglish)}
               </Badge>
-              {company ? (
-                <p className="text-sm text-primary-foreground/80">
-                  {isVerified
-                    ? isEnglish
-                      ? 'Verified company'
-                      : 'شركة موثقة'
-                    : isEnglish
-                      ? 'Verification pending'
-                      : 'الحساب قيد التوثيق'}
-                </p>
-              ) : null}
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
-                className="gap-2 bg-white/15 text-white hover:bg-white/25"
+                className="gap-2 bg-white/15 px-4 text-white hover:bg-white/25"
                 onClick={() => void loadDashboard()}
               >
                 <RefreshCw className="size-4" />
@@ -444,7 +425,7 @@ export default function CompanyDashboard() {
           ))}
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-2">
           <Card className="border-blue-100 bg-blue-50 text-blue-900 shadow-sm">
             <CardHeader className="min-h-28 pb-3">
               <CardDescription className="flex items-center gap-2 text-base text-blue-800">
@@ -465,27 +446,6 @@ export default function CompanyDashboard() {
             </CardHeader>
           </Card>
 
-          <Card className="border-slate-200 bg-slate-50 text-slate-900 shadow-sm">
-            <CardHeader className="min-h-28 pb-3">
-              <CardDescription className="flex items-center gap-2 text-base text-slate-700">
-                <Building2 className="h-4 w-4" />
-                {isEnglish ? 'Company verification' : 'توثيق الشركة'}
-              </CardDescription>
-              <CardTitle className="mt-2 text-2xl">
-                {company
-                  ? isVerified
-                    ? isEnglish
-                      ? 'Verified'
-                      : 'موثقة'
-                    : isEnglish
-                      ? 'Pending'
-                      : 'قيد التوثيق'
-                  : isEnglish
-                    ? 'Not provided'
-                    : 'غير متوفر'}
-              </CardTitle>
-            </CardHeader>
-          </Card>
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">

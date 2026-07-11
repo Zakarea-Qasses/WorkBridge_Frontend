@@ -151,8 +151,8 @@ export default function AdminSiteWallet() {
             </h2>
             <p className="mt-2 text-muted-foreground">
               {isEnglish
-                ? 'Track real reserved funds and escrow transaction history from the backend.'
-                : 'متابعة المبالغ المحجوزة وحركات محفظة الوسيط الحقيقية من الباك.'}
+                ? 'Track reserved funds and escrow transaction history.'
+                : 'متابعة المبالغ المحجوزة وحركات محفظة الوسيط.'}
             </p>
           </div>
           <Button variant="outline" disabled={loading} onClick={() => void loadWallets()}>
@@ -234,8 +234,8 @@ export default function AdminSiteWallet() {
           title={isEnglish ? 'Escrow wallet transactions' : 'حركات محفظة الوسيط'}
           description={
             isEnglish
-              ? 'Every backend transaction recorded on the escrow wallet.'
-              : 'كل حركة مالية مسجلة على محفظة الوسيط في الباك.'
+              ? 'Every transaction recorded on the escrow wallet.'
+              : 'كل حركة مالية مسجلة على محفظة الوسيط.'
           }
           transactions={escrowTransactions}
           loading={loading}

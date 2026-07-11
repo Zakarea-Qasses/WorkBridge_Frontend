@@ -135,7 +135,7 @@ export default function CompanyApplicants() {
       title: isEnglish ? 'Job Applicants' : 'متقدمو الوظائف',
       subtitle: isEnglish
         ? 'Review real applicants for your company jobs and update their status.'
-        : 'راجع المتقدمين الحقيقيين لوظائف شركتك وحدّث حالة كل طلب.',
+        : 'راجع المتقدمين لوظائف شركتك وحدّث حالة كل طلب.',
       refresh: isEnglish ? 'Refresh' : 'تحديث',
       allJobs: isEnglish ? 'All jobs' : 'كل الوظائف',
       allStatuses: isEnglish ? 'All statuses' : 'كل الحالات',
@@ -163,12 +163,12 @@ export default function CompanyApplicants() {
       reject: isEnglish ? 'Reject' : 'رفض',
       message: isEnglish ? 'Message' : 'مراسلة',
       acceptedNotice: isEnglish
-        ? 'Application accepted. Other applicants for this job were refreshed from the backend.'
-        : 'تم قبول الطلب. تم تحديث باقي المتقدمين لهذه الوظيفة من الخادم.',
+        ? 'Application accepted. Other applicants for this job were updated.'
+        : 'تم قبول الطلب. تم تحديث باقي المتقدمين لهذه الوظيفة.',
       rejectedNotice: isEnglish ? 'Application rejected.' : 'تم رفض الطلب.',
       confirmAccept: isEnglish
-        ? 'Accept this applicant? The backend will reject other applicants for the same job.'
-        : 'هل تريد قبول هذا المتقدم؟ سيقوم الخادم برفض باقي المتقدمين لنفس الوظيفة.',
+        ? 'Accept this applicant? Other applicants for the same job will be rejected.'
+        : 'هل تريد قبول هذا المتقدم؟ سيتم رفض باقي المتقدمين لنفس الوظيفة.',
       confirmReject: isEnglish
         ? 'Reject this applicant?'
         : 'هل تريد رفض هذا المتقدم؟',

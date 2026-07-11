@@ -286,11 +286,6 @@ export default function SupportCenter() {
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <div>
           <h1 className="text-3xl font-bold">{isEnglish ? 'Support Center' : 'مركز الدعم'}</h1>
-          <p className="mt-1 text-muted-foreground">
-            {isEnglish
-              ? 'Send a real support request and track the admin review status from this page.'
-              : 'أرسل طلب دعم حقيقي وتابع حالة مراجعته من الإدارة من نفس الصفحة.'}
-          </p>
         </div>
 
         <StatusMessage status={status} />
@@ -323,8 +318,8 @@ export default function SupportCenter() {
               <CardTitle>{isEnglish ? 'Create New Ticket' : 'إنشاء تذكرة جديدة'}</CardTitle>
               <CardDescription>
                 {isEnglish
-                  ? 'The request is submitted to the backend reports system.'
-                  : 'يتم إرسال الطلب إلى نظام البلاغات الحقيقي في الباك.'}
+                  ? 'Your request will be sent to the support team for review.'
+                  : 'سيتم إرسال طلبك إلى فريق الدعم للمراجعة.'}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -468,8 +463,8 @@ export default function SupportCenter() {
                   <CardTitle>{isEnglish ? 'Your Tickets History' : 'سجل تذاكرك'}</CardTitle>
                   <CardDescription>
                     {isEnglish
-                      ? 'These requests come from GET /reports/my.'
-                      : 'هذه الطلبات محملة من GET /reports/my.'}
+                      ? 'Review your previous support requests and their current status.'
+                      : 'راجع طلبات الدعم السابقة وحالتها الحالية.'}
                   </CardDescription>
                 </div>
                 <Button variant="outline" size="sm" disabled={loading} onClick={() => void loadReports()}>

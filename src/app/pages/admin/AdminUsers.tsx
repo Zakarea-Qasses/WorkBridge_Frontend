@@ -186,11 +186,6 @@ export default function AdminUsers() {
             <h2 className="text-3xl font-bold">
               {isEnglish ? 'User management' : 'إدارة المستخدمين'}
             </h2>
-            <p className="mt-2 text-muted-foreground">
-              {isEnglish
-                ? 'View all users, search by name, filter by account status, and manage review decisions.'
-                : 'عرض كل المستخدمين والبحث حسب الاسم أو البريد والفلترة حسب حالة الحساب.'}
-            </p>
           </div>
           <Button variant="outline" disabled={loading} onClick={() => void loadUsers()}>
             <RefreshCw className="me-2 size-4" />

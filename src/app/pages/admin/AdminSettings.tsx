@@ -86,8 +86,8 @@ export default function AdminSettings() {
             </h2>
             <p className="mt-2 text-muted-foreground">
               {isEnglish
-                ? 'Manage backend-backed admin notification preferences.'
-                : 'إدارة تفضيلات إشعارات الأدمن المربوطة بالباك.'}
+                ? 'Manage admin notification preferences.'
+                : 'إدارة تفضيلات إشعارات الأدمن.'}
             </p>
           </div>
           <Button variant="outline" disabled={loading || saving} onClick={() => void loadSettings()}>
@@ -124,11 +124,6 @@ export default function AdminSettings() {
         <Card>
           <CardHeader>
             <CardTitle>{isEnglish ? 'Notification rules' : 'قواعد الإشعارات'}</CardTitle>
-            <CardDescription>
-              {isEnglish
-                ? 'These values are loaded from GET /admin/settings and saved with PUT /admin/settings.'
-                : 'هذه القيم يتم تحميلها من GET /admin/settings وحفظها عبر PUT /admin/settings.'}
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {loading ? (

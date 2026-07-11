@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { AlertCircle, Briefcase, Clock, RefreshCw, Search, Wallet } from 'lucide-react';
+import { AlertCircle, Briefcase, Clock, LoaderCircle, RefreshCw, Search, Wallet } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui';
-import { getServices, type Service } from '@/app/api/endpoints';
+import { createReport, getServices, type Service } from '@/app/api/endpoints';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
+import { categoryDisplayName } from '@/app/utils/categoryLabels';
 
 function formatPrice(value: number | string, isEnglish: boolean) {
   const amount = Number(value);
@@ -26,7 +27,9 @@ export default function Services() {
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [reportingId, setReportingId] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
   const loadServices = useCallback(async () => {
     setLoading(true);
@@ -66,6 +69,27 @@ export default function Services() {
     });
   }, [categoryId, search, services]);
 
+  const reportService = async (service: Service) => {
+    try {
+      setReportingId(service.id);
+      setError('');
+      setMessage('');
+      await createReport({
+        target_type: 'service',
+        target_id: service.id,
+        title: `بلاغ عن خدمة: ${service.title}`,
+        category: 'complaint',
+        priority: 'normal',
+        description: `تم إرسال بلاغ على الخدمة "${service.title}" لمراجعتها من قبل الإدارة.\n\n${service.description || ''}`,
+      });
+      setMessage(isEnglish ? 'Report sent successfully.' : 'تم إرسال البلاغ بنجاح');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : (isEnglish ? 'Could not send report.' : 'تعذر إرسال البلاغ'));
+    } finally {
+      setReportingId(null);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
@@ -92,11 +116,17 @@ export default function Services() {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{isEnglish ? 'All categories' : 'كل التصنيفات'}</SelectItem>
-                {categories.map(([id, name]) => <SelectItem key={id} value={String(id)}>{name}</SelectItem>)}
+                {categories.map(([id, name]) => <SelectItem key={id} value={String(id)}>{categoryDisplayName(name, isEnglish)}</SelectItem>)}
               </SelectContent>
             </Select>
           </CardContent>
         </Card>
+
+        {message ? (
+          <Card className="border-green-200 bg-green-50">
+            <CardContent className="py-3 text-sm text-green-700">{message}</CardContent>
+          </Card>
+        ) : null}
 
         {loading ? (
           <div className="grid gap-6 md:grid-cols-2"><ServiceSkeleton /><ServiceSkeleton /><ServiceSkeleton /><ServiceSkeleton /></div>
@@ -122,7 +152,7 @@ export default function Services() {
                       <CardTitle className="text-lg">{service.title}</CardTitle>
                       <p className="mt-1 text-sm text-muted-foreground">{service.user?.name || (isEnglish ? 'Unknown provider' : 'مقدم خدمة غير معروف')}</p>
                     </div>
-                    {service.category ? <Badge variant="outline">{service.category.name}</Badge> : null}
+                    {service.category ? <Badge variant="outline">{categoryDisplayName(service.category.name, isEnglish)}</Badge> : null}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -133,7 +163,17 @@ export default function Services() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {service.user_id !== user?.id ? (
-                      <Button onClick={() => navigate(`/services/${service.id}/request`)}>{isEnglish ? 'Request service' : 'طلب الخدمة'}</Button>
+                      <>
+                        <Button onClick={() => navigate(`/services/${service.id}/request`)}>{isEnglish ? 'Request service' : 'طلب الخدمة'}</Button>
+                        <Button
+                          variant="outline"
+                          disabled={reportingId === service.id}
+                          onClick={() => void reportService(service)}
+                        >
+                          {reportingId === service.id ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
+                          {isEnglish ? 'Report post' : 'إبلاغ عن المنشور'}
+                        </Button>
+                      </>
                     ) : (
                       <Button asChild variant="outline"><Link to="/services/my"><Briefcase className="me-2 size-4" />{isEnglish ? 'Manage service' : 'إدارة الخدمة'}</Link></Button>
                     )}

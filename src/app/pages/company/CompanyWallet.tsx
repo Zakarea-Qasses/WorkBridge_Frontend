@@ -156,11 +156,6 @@ export default function CompanyWallet() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">{isEnglish ? 'Company wallet' : 'محفظة الشركة'}</h1>
-            <p className="mt-1 text-muted-foreground">
-              {isEnglish
-                ? 'Real company balance and financial transactions from the backend.'
-                : 'رصيد الشركة وحركاتها المالية الحقيقية من الباك.'}
-            </p>
           </div>
           <Button variant="outline" disabled={loading} onClick={() => void loadWallet()}>
             <RefreshCw className="me-2 size-4" />
@@ -206,7 +201,7 @@ export default function CompanyWallet() {
               <CardContent className="flex items-center gap-2 opacity-80">
                 <WalletIcon className="size-5" />
                 <span className="text-sm">
-                  {isEnglish ? 'Confirmed by GET /wallet' : 'الرصيد المعتمد من GET /wallet'}
+                  {isEnglish ? 'Available balance' : 'الرصيد المتاح'}
                 </span>
               </CardContent>
             </Card>

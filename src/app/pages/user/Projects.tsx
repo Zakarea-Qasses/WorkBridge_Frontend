@@ -20,6 +20,7 @@ import {
 } from '@/app/components/ui';
 import { getApiErrorMessage } from '@/app/api/client';
 import { createReport, getCategories, getProjects, type Category, type UserProject } from '@/app/api/endpoints';
+import { categoryDisplayName } from '@/app/utils/categoryLabels';
 
 type StatusMessage = { type: 'success' | 'error'; message: string } | null;
 
@@ -149,8 +150,8 @@ export default function Projects() {
               <h1 className="text-3xl font-bold">{isEnglish ? 'Available Projects' : 'المشاريع المتاحة'}</h1>
               <p className="mt-2 text-muted-foreground">
                 {isEnglish
-                  ? 'Browse real projects from the backend and submit offers from the details page.'
-                  : 'تصفح المشاريع الحقيقية من الباك وقدّم عروضك من صفحة التفاصيل.'}
+                  ? 'Browse available projects and submit offers from the details page.'
+                  : 'تصفح المشاريع المتاحة وقدّم عروضك من صفحة التفاصيل.'}
               </p>
             </div>
 
@@ -194,7 +195,7 @@ export default function Projects() {
                   <SelectItem value="all">{isEnglish ? 'All categories' : 'كل التصنيفات'}</SelectItem>
                   {categories.map((category) => (
                     <SelectItem key={category.id} value={String(category.id)}>
-                      {category.name}
+                      {categoryDisplayName(category.name, isEnglish)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -242,7 +243,7 @@ export default function Projects() {
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <CardTitle className="text-xl">{project.title}</CardTitle>
-                        {project.category ? <Badge variant="secondary">{project.category.name}</Badge> : null}
+                        {project.category ? <Badge variant="secondary">{categoryDisplayName(project.category.name, isEnglish)}</Badge> : null}
                         <Badge variant="outline">{statusLabel(project.status, isEnglish)}</Badge>
                       </div>
                       <CardDescription className="text-sm">

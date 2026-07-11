@@ -15,11 +15,6 @@ export default function AppliedJobs() {
             <h1 className="text-3xl font-bold">
               {isEnglish ? 'My Job Applications' : 'تقديماتي على الوظائف'}
             </h1>
-            <p className="mt-1 text-muted-foreground">
-              {isEnglish
-                ? 'Track the current status of your real job applications.'
-                : 'تابع الحالة الحالية لتقديماتك الحقيقية على الوظائف.'}
-            </p>
           </div>
           <Button asChild>
             <Link to="/jobs">{isEnglish ? 'Browse jobs' : 'تصفح الوظائف'}</Link>

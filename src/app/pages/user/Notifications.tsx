@@ -70,6 +70,143 @@ function notificationIcon(type: string | null) {
   return <Bell className="size-5 text-primary" />;
 }
 
+const englishNotificationText: Record<string, { title: string; message: string }> = {
+  new_account_review: {
+    title: 'New account awaiting review',
+    message: 'A new account was created and needs admin review.',
+  },
+  company_verified: {
+    title: 'Company verified',
+    message: 'Your company account has been verified by the admin.',
+  },
+  company_unverified: {
+    title: 'Company verification removed',
+    message: 'Your company account verification has been removed by the admin.',
+  },
+  account_approved: {
+    title: 'Account approved',
+    message: 'Your account has been reviewed and approved by the admin.',
+  },
+  account_blocked: {
+    title: 'Account blocked',
+    message: 'Your account has been blocked by the admin.',
+  },
+  project_application: {
+    title: 'New offer on your project',
+    message: 'A user submitted a new offer on one of your projects.',
+  },
+  application_accepted: {
+    title: 'Application accepted',
+    message: 'Your application has been accepted.',
+  },
+  application_rejected: {
+    title: 'Application rejected',
+    message: 'Your application has been rejected.',
+  },
+  service_request: {
+    title: 'New service request',
+    message: 'A new request was sent for one of your services.',
+  },
+  service_request_accepted: {
+    title: 'Service request accepted',
+    message: 'Your service request has been accepted.',
+  },
+  service_request_rejected: {
+    title: 'Service request rejected',
+    message: 'Your service request has been rejected.',
+  },
+  new_report: {
+    title: 'New report',
+    message: 'A new report was sent and needs admin review.',
+  },
+  report_decision: {
+    title: 'Report decision',
+    message: 'The admin has updated the decision for your report.',
+  },
+  project_created: {
+    title: 'Project published',
+    message: 'Your project has been published successfully.',
+  },
+  project_updated: {
+    title: 'Project updated',
+    message: 'Your project has been updated successfully.',
+  },
+  project_deleted: {
+    title: 'Project deleted',
+    message: 'Your project has been deleted.',
+  },
+  project_status_updated: {
+    title: 'Project status updated',
+    message: 'The admin has updated the status of your project.',
+  },
+  project_deleted_by_admin: {
+    title: 'Project deleted by admin',
+    message: 'Your project was deleted by the admin.',
+  },
+  service_created: {
+    title: 'Service published',
+    message: 'Your service has been published successfully.',
+  },
+  service_updated: {
+    title: 'Service updated',
+    message: 'Your service has been updated successfully.',
+  },
+  service_deleted: {
+    title: 'Service deleted',
+    message: 'Your service has been deleted.',
+  },
+  service_status_updated: {
+    title: 'Service status updated',
+    message: 'The admin has updated the status of your service.',
+  },
+  service_deleted_by_admin: {
+    title: 'Service deleted by admin',
+    message: 'Your service was deleted by the admin.',
+  },
+  job_status_updated: {
+    title: 'Job status updated',
+    message: 'The admin has updated the status of a job post.',
+  },
+  job_deleted_by_admin: {
+    title: 'Job deleted by admin',
+    message: 'A job post was deleted by the admin.',
+  },
+  wallet_deposit: {
+    title: 'Wallet deposit',
+    message: 'A wallet deposit operation was processed.',
+  },
+  wallet_withdraw: {
+    title: 'Wallet withdrawal',
+    message: 'A wallet withdrawal operation was processed.',
+  },
+  contract_created: {
+    title: 'Contract created',
+    message: 'A new contract has been created.',
+  },
+  contract_updated: {
+    title: 'Contract updated',
+    message: 'A contract has been updated.',
+  },
+  message_received: {
+    title: 'New message',
+    message: 'You received a new message.',
+  },
+};
+
+function notificationTitle(notification: UserNotification, isEnglish: boolean) {
+  if (!isEnglish) return notification.title;
+  return notification.type && englishNotificationText[notification.type]
+    ? englishNotificationText[notification.type].title
+    : notificationTypeLabel(notification.type, true);
+}
+
+function notificationMessage(notification: UserNotification, isEnglish: boolean) {
+  if (!isEnglish) return notification.message;
+  return notification.type && englishNotificationText[notification.type]
+    ? englishNotificationText[notification.type].message
+    : 'You have a new notification.';
+}
+
 function formatDate(value: string, isEnglish: boolean) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return isEnglish ? 'Date unavailable' : 'التاريخ غير متاح';
@@ -274,12 +411,12 @@ export function NotificationsPage({ userType = 'user' }: { userType?: 'user' | '
                       <div className="mt-1">{notificationIcon(notification.type)}</div>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="font-semibold">{notification.title}</h2>
+                          <h2 className="font-semibold">{notificationTitle(notification, isEnglish)}</h2>
                           <Badge variant="outline">{notificationTypeLabel(notification.type, isEnglish)}</Badge>
                           {!notification.read_at ? <Badge>{isEnglish ? 'New' : 'جديد'}</Badge> : null}
                         </div>
                         <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-                          {notification.message}
+                          {notificationMessage(notification, isEnglish)}
                         </p>
                         <p className="mt-2 text-xs text-muted-foreground">
                           {formatDate(notification.created_at, isEnglish)}

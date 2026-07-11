@@ -21,6 +21,7 @@ import {
 import { getApiErrorMessage } from '@/app/api/client';
 import {
   applyToJob,
+  createReport,
   getJobs,
   getMyJobApplications,
   type JobPost,
@@ -46,6 +47,7 @@ export default function Jobs() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [applyingId, setApplyingId] = useState<number | null>(null);
+  const [reportingId, setReportingId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -110,6 +112,27 @@ export default function Jobs() {
     }
   };
 
+  const reportJob = async (job: JobPost) => {
+    try {
+      setReportingId(job.id);
+      setError('');
+      setMessage('');
+      await createReport({
+        target_type: 'job',
+        target_id: job.id,
+        title: `بلاغ عن وظيفة: ${job.title}`,
+        category: 'complaint',
+        priority: 'normal',
+        description: `تم إرسال بلاغ على الوظيفة "${job.title}" لمراجعتها من قبل الإدارة.\n\n${job.description}`,
+      });
+      setMessage(isEnglish ? 'Report sent successfully.' : 'تم إرسال البلاغ بنجاح');
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError) || (isEnglish ? 'Could not send report.' : 'تعذر إرسال البلاغ'));
+    } finally {
+      setReportingId(null);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
@@ -121,7 +144,7 @@ export default function Jobs() {
             <p className="mt-1 text-muted-foreground">
               {isEnglish
                 ? 'Browse active jobs and submit a real application.'
-                : 'تصفح الوظائف النشطة وأرسل طلب تقديم حقيقي.'}
+                : 'تصفح الوظائف النشطة وأرسل طلب تقديم '}
             </p>
           </div>
           <Button asChild variant="outline">
@@ -215,6 +238,15 @@ export default function Jobs() {
                         : applyingId === job.id
                           ? isEnglish ? 'Submitting...' : 'جار الإرسال...'
                           : isEnglish ? 'Apply to job' : 'التقديم إلى الوظيفة'}
+                    </Button>
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      disabled={reportingId === job.id}
+                      onClick={() => void reportJob(job)}
+                    >
+                      {reportingId === job.id ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
+                      {isEnglish ? 'Report post' : 'إبلاغ عن المنشور'}
                     </Button>
                   </CardContent>
                 </Card>

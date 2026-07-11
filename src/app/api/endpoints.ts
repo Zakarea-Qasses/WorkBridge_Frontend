@@ -474,7 +474,7 @@ export interface AdminSettings {
 export type ReportCategory = 'support' | 'complaint' | 'dispute' | 'payment' | 'technical';
 export type ReportPriority = 'low' | 'normal' | 'high';
 export type ReportStatus = 'pending' | 'accepted' | 'rejected' | string;
-export type ReportTargetType = 'user' | 'project' | 'service' | 'contract' | 'general';
+export type ReportTargetType = 'user' | 'project' | 'service' | 'job' | 'contract' | 'general';
 
 export interface ReportUser {
   id: number;

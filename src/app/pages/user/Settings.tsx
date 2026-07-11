@@ -395,8 +395,8 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
   const clearBackendData = async () => {
     const confirmed = window.confirm(
       isEnglish
-        ? 'Are you sure you want to clear the backend data available for this setting?'
-        : 'هل أنت متأكد من حذف البيانات المتاحة عبر الباك لهذا الإعداد؟',
+        ? 'Are you sure you want to clear the saved data for this setting?'
+        : 'هل أنت متأكد من حذف البيانات المحفوظة لهذا الإعداد؟',
     );
     if (!confirmed) return;
 
@@ -432,9 +432,6 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <div>
           <h1 className="text-3xl font-bold">{getTitle(userType, isEnglish)}</h1>
-          <p className="mt-1 text-muted-foreground">
-            {isEnglish ? 'Manage account settings through the backend.' : 'إدارة إعدادات الحساب من خلال الباك.'}
-          </p>
         </div>
 
         <StatusMessage status={status} />
@@ -511,15 +508,6 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
               <Card>
                 <CardHeader>
                   <CardTitle>{isEnglish ? 'Basic information' : 'المعلومات الأساسية'}</CardTitle>
-                  <CardDescription>
-                    {isCompany
-                      ? isEnglish
-                        ? 'Loaded from GET /company and saved through PUT /company.'
-                        : 'يتم تحميلها من GET /company وحفظها عبر PUT /company.'
-                      : isEnglish
-                        ? 'Loaded from GET /profile and saved through PUT /profile.'
-                        : 'يتم تحميلها من GET /profile وحفظها عبر PUT /profile.'}
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
@@ -615,9 +603,6 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
               <Card>
                 <CardHeader>
                   <CardTitle>{isEnglish ? 'Change password' : 'تغيير كلمة المرور'}</CardTitle>
-                  <CardDescription>
-                    {isEnglish ? 'Saved through PUT /settings/password.' : 'يتم حفظها عبر PUT /settings/password.'}
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <Input
@@ -656,11 +641,6 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
               <Card>
                 <CardHeader>
                   <CardTitle>{isEnglish ? 'Privacy settings' : 'إعدادات الخصوصية'}</CardTitle>
-                  <CardDescription>
-                    {isEnglish
-                      ? 'Loaded from GET /settings and saved through PUT /settings/privacy.'
-                      : 'يتم تحميلها من GET /settings وحفظها عبر PUT /settings/privacy.'}
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
                   <div className="flex items-center justify-between gap-4 rounded-md border p-4">
@@ -718,11 +698,6 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
               <Card>
                 <CardHeader>
                   <CardTitle>{isEnglish ? 'Notification preferences' : 'تفضيلات الإشعارات'}</CardTitle>
-                  <CardDescription>
-                    {isEnglish
-                      ? 'Loaded from GET /settings and saved through PUT /settings/notifications.'
-                      : 'يتم تحميلها من GET /settings وحفظها عبر PUT /settings/notifications.'}
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
                   <div className="flex items-center justify-between gap-4 rounded-md border p-4">
@@ -756,11 +731,11 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
             <TabsContent value="data">
               <Card className="border-destructive/30">
                 <CardHeader>
-                  <CardTitle className="text-destructive">{isEnglish ? 'Clear backend data' : 'حذف بيانات من الباك'}</CardTitle>
+                  <CardTitle className="text-destructive">{isEnglish ? 'Clear saved data' : 'حذف البيانات المحفوظة'}</CardTitle>
                   <CardDescription>
                     {isEnglish
-                      ? 'This backend action currently clears your notifications through DELETE /settings/local-data.'
-                      : 'هذا الإجراء يحذف إشعاراتك من الباك عبر DELETE /settings/local-data.'}
+                      ? 'This action clears the saved notification data for your account.'
+                      : 'هذا الإجراء يحذف بيانات الإشعارات المحفوظة في حسابك.'}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>

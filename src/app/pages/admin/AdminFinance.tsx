@@ -140,7 +140,7 @@ export default function AdminFinance() {
     {
       label: isEnglish ? 'All wallets balance' : 'إجمالي أرصدة المحافظ',
       value: formatAmount(totalWalletBalance, isEnglish),
-      note: isEnglish ? `${wallets.length} wallets from backend` : `${wallets.length} محفظة من الباك`,
+      note: isEnglish ? `${wallets.length} wallets` : `${wallets.length} محفظة`,
     },
     {
       label: isEnglish ? 'Admin wallet balance' : 'رصيد محفظة الأدمن',
@@ -169,8 +169,8 @@ export default function AdminFinance() {
             </h2>
             <p className="mt-2 text-muted-foreground">
               {isEnglish
-                ? 'Real admin, escrow, earnings, and wallet data from the backend.'
-                : 'بيانات حقيقية لمحفظة الأدمن ومحفظة الوسيط والأرباح والمحافظ من الباك.'}
+                ? 'Admin wallet, escrow, earnings, and platform wallet data.'
+                : 'بيانات محفظة الأدمن ومحفظة الوسيط والأرباح والمحافظ.'}
             </p>
           </div>
           <Button variant="outline" disabled={loading} onClick={() => void loadFinance()}>

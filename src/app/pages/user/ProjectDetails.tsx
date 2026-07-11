@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router';
-import { AlertCircle, CheckCircle2, LoaderCircle, User, Wallet } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router';
+import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, User, Wallet } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import {
@@ -19,6 +19,7 @@ import {
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import { applyToProject, getProject, type UserProject } from '@/app/api/endpoints';
 import { useAuth } from '@/app/providers/AuthProvider';
+import { categoryDisplayName } from '@/app/utils/categoryLabels';
 
 type Status = { type: 'success' | 'error'; message: string } | null;
 
@@ -71,8 +72,10 @@ function StatusMessage({ status }: { status: Status }) {
 
 export default function ProjectDetails() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { isEnglish, language } = useLanguage();
   const { user } = useAuth();
+  const BackIcon = isEnglish ? ArrowLeft : ArrowRight;
   const requestIdRef = useRef(0);
   const [project, setProject] = useState<UserProject | null>(null);
   const [loading, setLoading] = useState(true);
@@ -168,15 +171,37 @@ export default function ProjectDetails() {
     }
   };
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/projects');
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Link to="/projects" className="hover:text-primary">
             {isEnglish ? 'Projects' : 'المشاريع'}
           </Link>
           <span>/</span>
           <span className="text-foreground">{isEnglish ? 'Project Details' : 'تفاصيل المشروع'}</span>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={handleBack}
+            aria-label={isEnglish ? 'Back' : 'رجوع'}
+            title={isEnglish ? 'Back' : 'رجوع'}
+            className="shrink-0"
+          >
+            <BackIcon className="h-4 w-4" />
+          </Button>
         </div>
 
         <StatusMessage status={status} />
@@ -216,7 +241,7 @@ export default function ProjectDetails() {
                     <div className="space-y-2">
                       <CardTitle className="text-2xl">{project.title}</CardTitle>
                       <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                        {project.category ? <Badge variant="secondary">{project.category.name}</Badge> : null}
+                        {project.category ? <Badge variant="secondary">{categoryDisplayName(project.category.name, isEnglish)}</Badge> : null}
                         <span>{formatDate(project.created_at, isEnglish)}</span>
                       </div>
                     </div>
@@ -258,8 +283,8 @@ export default function ProjectDetails() {
                     <CardTitle>{isEnglish ? 'Submit Proposal' : 'تقديم عرض'}</CardTitle>
                     <CardDescription>
                       {isEnglish
-                        ? 'Your proposal will be sent to the project owner through the backend.'
-                        : 'سيتم إرسال عرضك لصاحب المشروع عبر الباك.'}
+                        ? 'Your proposal will be sent to the project owner for review.'
+                        : 'سيتم إرسال عرضك إلى صاحب المشروع للمراجعة.'}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -391,8 +416,8 @@ export default function ProjectDetails() {
                 <CardContent className="space-y-2 text-sm text-muted-foreground">
                   <p>
                     {isEnglish
-                      ? 'Enter your price, duration, and execution details. The project owner reviews real applications from the backend.'
-                      : 'أدخل السعر والمدة وتفاصيل التنفيذ. صاحب المشروع يراجع التقديمات الحقيقية من الباك.'}
+                      ? 'Enter your price, duration, and execution details so the project owner can review your offer.'
+                      : 'أدخل السعر والمدة وتفاصيل التنفيذ ليتمكن صاحب المشروع من مراجعة عرضك.'}
                   </p>
                 </CardContent>
               </Card>

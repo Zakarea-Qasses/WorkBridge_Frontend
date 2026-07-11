@@ -141,8 +141,8 @@ export default function AdminDisputes() {
             </h2>
             <p className="mt-2 text-muted-foreground">
               {isEnglish
-                ? 'Real contract disputes and payment reports from the backend.'
-                : 'نزاعات العقود وبلاغات الدفع الحقيقية من الباك.'}
+                ? 'Review contract disputes and payment reports.'
+                : 'مراجعة نزاعات العقود وبلاغات الدفع.'}
             </p>
           </div>
           <Button variant="outline" disabled={loading} onClick={() => void loadDisputes()}>

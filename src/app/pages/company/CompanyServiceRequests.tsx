@@ -160,8 +160,8 @@ export default function CompanyServiceRequests() {
             </h1>
             <p className="mt-1 text-muted-foreground">
               {isEnglish
-                ? 'Track the service requests your company sent from the real backend.'
-                : 'تابع طلبات الخدمات التي أرسلتها الشركة من بيانات الباك الحقيقية.'}
+                ? 'Track the service requests your company has sent.'
+                : 'تابع طلبات الخدمات التي أرسلتها الشركة.'}
             </p>
           </div>
           <Button variant="outline" disabled={loading} onClick={() => void load()}>

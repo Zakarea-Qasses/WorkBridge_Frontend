@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { LoaderCircle, Upload, Wallet } from 'lucide-react';
+import { ArrowLeft, ArrowRight, LoaderCircle, Upload, Wallet } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import {
   Button,
@@ -31,6 +31,7 @@ import {
 export default function TopUpWallet() {
   const navigate = useNavigate();
   const { isEnglish, language } = useLanguage();
+  const BackIcon = isEnglish ? ArrowLeft : ArrowRight;
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<WalletPaymentMethod>(DEFAULT_WALLET_PAYMENT_METHOD);
   const [paymentNote, setPaymentNote] = useState('');
@@ -97,12 +98,31 @@ export default function TopUpWallet() {
     }
   };
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/wallet');
+  };
+
   return (
     <DashboardLayout>
       <div className="mx-auto max-w-2xl space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-3xl font-bold">{isEnglish ? 'Deposit' : 'شحن المحفظة'}</h1>
-          <Button asChild variant="outline">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={handleBack}
+            aria-label={isEnglish ? 'Back' : 'رجوع'}
+            title={isEnglish ? 'Back' : 'رجوع'}
+          >
+            <BackIcon className="h-4 w-4" />
+          </Button>
+          <Button asChild variant="outline" className="hidden">
             <Link to="/wallet">{isEnglish ? 'Back to wallet' : 'العودة إلى المحفظة'}</Link>
           </Button>
         </div>

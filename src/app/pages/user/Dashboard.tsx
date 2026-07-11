@@ -17,6 +17,7 @@ import { ApiError } from '@/app/api/client';
 import { getPersonalDashboard, PersonalDashboardResponse } from '@/app/api/endpoints';
 import { getDashboardPathForUser, useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
+import { categoryDisplayName } from '@/app/utils/categoryLabels';
 import { formatUsd } from '@/app/utils/money';
 
 function DashboardLoading() {
@@ -197,13 +198,8 @@ export default function Dashboard() {
                   <h2 className="mb-2 text-2xl font-bold">
                     {isEnglish
                       ? `Welcome, ${displayedUser?.name || ''}`
-                      : `مرحبًا، ${displayedUser?.name || ''}`}
+                      : `مرحباً ${displayedUser?.name || ''}`}
                   </h2>
-                  <p className="text-blue-100">
-                    {isEnglish
-                      ? 'Your personal Work Bridge account is ready.'
-                      : dashboard.message}
-                  </p>
                 </div>
                 <Button
                   variant="secondary"
@@ -405,7 +401,7 @@ export default function Dashboard() {
                       <div>
                         <p className="font-medium">{project.title}</p>
                         <p className="text-sm text-muted-foreground">
-                          {project.category_name || (isEnglish ? 'No category' : 'بدون تصنيف')} - {formatDate(project.created_at, isEnglish)}
+                          {categoryDisplayName(project.category_name, isEnglish) || (isEnglish ? 'No category' : 'بدون تصنيف')} - {formatDate(project.created_at, isEnglish)}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">

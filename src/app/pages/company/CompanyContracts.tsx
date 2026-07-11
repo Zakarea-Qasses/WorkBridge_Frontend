@@ -277,8 +277,8 @@ export default function CompanyContracts() {
             <h1 className="text-3xl font-bold">{isEnglish ? 'Company Contracts' : 'عقود الشركة'}</h1>
             <p className="mt-1 text-muted-foreground">
               {isEnglish
-                ? 'View and manage real company contracts from the backend.'
-                : 'عرض وإدارة عقود الشركة الحقيقية من الباك.'}
+                ? 'View and manage your company contracts.'
+                : 'عرض  عقود الشركة.'}
             </p>
           </div>
           <Button variant="outline" disabled={loading} onClick={() => void load()}>

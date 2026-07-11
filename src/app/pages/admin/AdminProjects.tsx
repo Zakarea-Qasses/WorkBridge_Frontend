@@ -40,6 +40,7 @@ import {
   updateAdminProjectStatus,
   updateAdminServiceStatus,
 } from '@/app/api/endpoints';
+import { categoryDisplayName } from '@/app/utils/categoryLabels';
 
 type StatusFilter = 'all' | AdminContentStatus;
 type Feedback = { type: 'success' | 'error'; message: string } | null;
@@ -359,8 +360,8 @@ export default function AdminProjects() {
   const deleteCategory = async (category: Category) => {
     const confirmed = window.confirm(
       isEnglish
-        ? `Delete category "${category.name}"?`
-        : `هل تريد حذف التصنيف "${category.name}"؟`,
+        ? `Delete category "${categoryDisplayName(category.name, true)}"?`
+        : `هل تريد حذف التصنيف "${categoryDisplayName(category.name, false)}"؟`,
     );
 
     if (!confirmed) return;
@@ -430,8 +431,8 @@ export default function AdminProjects() {
                   {pagination
                     ? `${pagination.total} ${isEnglish ? 'items total' : 'عنصر بالمجموع'}`
                     : isEnglish
-                      ? 'Content is loaded from the backend.'
-                      : 'يتم تحميل المحتوى من الباك.'}
+                      ? 'Manage platform content from one place.'
+                      : 'إدارة محتوى المنصة من مكان واحد.'}
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -529,7 +530,7 @@ export default function AdminProjects() {
                                 />
                               ) : (
                                 <>
-                                  <h3 className="font-semibold">{category.name}</h3>
+                                  <h3 className="font-semibold">{categoryDisplayName(category.name, isEnglish)}</h3>
                                   <p className="text-sm text-muted-foreground">
                                     {isEnglish ? 'Category ID' : 'رقم التصنيف'}: {category.id}
                                   </p>
@@ -612,6 +613,8 @@ export default function AdminProjects() {
                   const currentStatus = (item.status || 'active') as AdminContentStatus;
                   const ownerName = getOwnerName(item, activeType);
                   const categoryName = getCategoryName(item, activeType);
+                  const displayCategoryName =
+                    activeType === 'jobs' ? categoryName : categoryDisplayName(categoryName, isEnglish);
 
                   return (
                     <Card key={`${activeType}-${item.id}`}>
@@ -643,7 +646,7 @@ export default function AdminProjects() {
                               <span>
                                 {isEnglish ? 'Category/location' : 'التصنيف/الموقع'}:{' '}
                                 <strong className="font-medium text-foreground">
-                                  {categoryName || (isEnglish ? 'Not available' : 'غير متوفر')}
+                                  {displayCategoryName || (isEnglish ? 'Not available' : 'غير متوفر')}
                                 </strong>
                               </span>
                               <span>

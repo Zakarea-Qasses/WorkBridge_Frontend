@@ -1,6 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertTriangle,
   Building2,
   CheckCircle2,
   ExternalLink,
@@ -23,6 +22,7 @@ import {
 } from '@/app/api/endpoints';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { getDashboardPathForUser, useAuth } from '@/app/providers/AuthProvider';
+import { locationDisplayName } from '@/app/utils/locationLabels';
 import {
   Badge,
   Button,
@@ -103,16 +103,16 @@ function formatValidationMessage(message: string, isEnglish: boolean) {
   return message;
 }
 
-function getLocationText(company: CompanyProfileData, emptyLabel: string) {
+function getLocationText(company: CompanyProfileData, emptyLabel: string, isEnglish: boolean) {
   const city = company.city?.name;
   const governorate = company.governorate?.name;
 
   if (city && governorate) {
-    return `${city}، ${governorate}`;
+    return `${locationDisplayName(city, isEnglish)}, ${locationDisplayName(governorate, isEnglish)}`;
   }
 
   if (city || governorate) {
-    return city || governorate || emptyLabel;
+    return locationDisplayName(city || governorate, isEnglish) || emptyLabel;
   }
 
   return company.location || emptyLabel;
@@ -139,14 +139,10 @@ export default function CompanyProfile() {
   const labels = useMemo(
     () => ({
       title: isEnglish ? 'Company profile' : 'ملف الشركة',
-      subtitle: isEnglish
-        ? 'Manage the real company data shown to users and administrators.'
-        : 'إدارة بيانات الشركة الحقيقية الظاهرة للمستخدمين والإدارة.',
       edit: isEnglish ? 'Edit profile' : 'تعديل الملف',
       cancel: isEnglish ? 'Cancel' : 'إلغاء',
       save: isEnglish ? 'Save changes' : 'حفظ التغييرات',
       verified: isEnglish ? 'Verified company' : 'شركة موثقة',
-      pending: isEnglish ? 'Verification pending' : 'الحساب قيد التوثيق',
       loading: isEnglish ? 'Loading company profile...' : 'جاري تحميل ملف الشركة...',
       notAllowed: isEnglish
         ? 'This page is available for company accounts only.'
@@ -167,9 +163,6 @@ export default function CompanyProfile() {
       governorate: isEnglish ? 'Governorate' : 'المحافظة',
       city: isEnglish ? 'City' : 'المدينة',
       skills: isEnglish ? 'Company skills' : 'مجالات عمل الشركة',
-      skillsHint: isEnglish
-        ? 'Separate skills with commas, for example: Laravel, React, Marketing'
-        : 'افصل المجالات بفواصل، مثال: Laravel, React, Marketing',
       noDescription: isEnglish
         ? 'No company description has been added yet.'
         : 'لم تتم إضافة وصف للشركة بعد.',
@@ -181,9 +174,6 @@ export default function CompanyProfile() {
       selectCity: isEnglish ? 'Select city' : 'اختر المدينة',
       clearSelection: isEnglish ? 'Not selected' : 'غير محدد',
       openWebsite: isEnglish ? 'Open website' : 'فتح الموقع',
-      readOnlyVerification: isEnglish
-        ? 'Verification status is managed by the admin.'
-        : 'حالة التوثيق تتم إدارتها من قبل الأدمن.',
     }),
     [isEnglish],
   );
@@ -316,7 +306,7 @@ export default function CompanyProfile() {
   const websiteUrl = useMemo(() => normalizeWebsite(company?.website || null), [company?.website]);
 
   const skills = company?.skills || [];
-  const locationText = company ? getLocationText(company, labels.noLocation) : labels.noLocation;
+  const locationText = company ? getLocationText(company, labels.noLocation, isEnglish) : labels.noLocation;
 
   const handleDraftChange = (key: keyof CompanyDraft, value: string) => {
     setDraft((current) => (current ? { ...current, [key]: value } : current));
@@ -483,26 +473,18 @@ export default function CompanyProfile() {
         <section className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="text-3xl font-bold">{labels.title}</h2>
-            <p className="mt-2 text-muted-foreground">{labels.subtitle}</p>
           </div>
 
-          {company ? (
+          {company?.is_verified ? (
             <div className="flex flex-col items-start gap-2 sm:items-end">
               <Badge
                 className={
-                  company.is_verified
-                    ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
-                    : 'bg-amber-100 text-amber-700 hover:bg-amber-100'
+                  'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
                 }
               >
-                {company.is_verified ? (
-                  <CheckCircle2 className="me-1 h-3.5 w-3.5" />
-                ) : (
-                  <AlertTriangle className="me-1 h-3.5 w-3.5" />
-                )}
-                {company.is_verified ? labels.verified : labels.pending}
+                <CheckCircle2 className="me-1 h-3.5 w-3.5" />
+                {labels.verified}
               </Badge>
-              <p className="text-xs text-muted-foreground">{labels.readOnlyVerification}</p>
             </div>
           ) : null}
         </section>
@@ -621,7 +603,7 @@ export default function CompanyProfile() {
                             <SelectItem value={noneValue}>{labels.clearSelection}</SelectItem>
                             {governorates.map((governorate) => (
                               <SelectItem key={governorate.id} value={String(governorate.id)}>
-                                {governorate.name}
+                                {locationDisplayName(governorate.name, isEnglish)}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -643,7 +625,7 @@ export default function CompanyProfile() {
                             <SelectItem value={noneValue}>{labels.clearSelection}</SelectItem>
                             {cities.map((city) => (
                               <SelectItem key={city.id} value={String(city.id)}>
-                                {city.name}
+                                {locationDisplayName(city.name, isEnglish)}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -727,7 +709,6 @@ export default function CompanyProfile() {
             <Card>
               <CardHeader>
                 <CardTitle>{labels.skills}</CardTitle>
-                <CardDescription>{labels.skillsHint}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {isEditing ? (

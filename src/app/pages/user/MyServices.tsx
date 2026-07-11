@@ -7,6 +7,7 @@ import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import { deleteService, getCategories, getServices, updateService, type Category, type Service } from '@/app/api/endpoints';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
+import { categoryDisplayName } from '@/app/utils/categoryLabels';
 
 export default function MyServices() {
   const { user } = useAuth();
@@ -104,7 +105,7 @@ export default function MyServices() {
             <CardContent className="space-y-4">
               <div className="space-y-2"><Label>{isEnglish ? 'Title' : 'العنوان'}</Label><Input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />{errors.title?.[0] ? <p className="text-xs text-destructive">{errors.title[0]}</p> : null}</div>
               <div className="grid gap-4 md:grid-cols-3">
-                <div className="space-y-2"><Label>{isEnglish ? 'Category' : 'التصنيف'}</Label><Select value={draft.category_id} onValueChange={(value) => setDraft({ ...draft, category_id: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map((category) => <SelectItem key={category.id} value={String(category.id)}>{category.name}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-2"><Label>{isEnglish ? 'Category' : 'التصنيف'}</Label><Select value={draft.category_id} onValueChange={(value) => setDraft({ ...draft, category_id: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map((category) => <SelectItem key={category.id} value={String(category.id)}>{categoryDisplayName(category.name, isEnglish)}</SelectItem>)}</SelectContent></Select></div>
                 <div className="space-y-2"><Label>{isEnglish ? 'Price' : 'السعر'}</Label><Input type="number" min="0" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value })} /></div>
                 <div className="space-y-2"><Label>{isEnglish ? 'Delivery days' : 'مدة التسليم'}</Label><Input type="number" min="1" value={draft.delivery_days} onChange={(e) => setDraft({ ...draft, delivery_days: e.target.value })} /></div>
               </div>
@@ -120,7 +121,7 @@ export default function MyServices() {
           <div className="grid gap-4">
             {services.map((service) => (
               <Card key={service.id}><CardContent className="flex flex-col justify-between gap-4 pt-6 md:flex-row md:items-center">
-                <div><h2 className="font-semibold">{service.title}</h2><p className="mt-1 text-sm text-muted-foreground">{service.category?.name} · {service.price} · {service.delivery_days} {isEnglish ? 'days' : 'يوم'}</p></div>
+                <div><h2 className="font-semibold">{service.title}</h2><p className="mt-1 text-sm text-muted-foreground">{categoryDisplayName(service.category?.name, isEnglish) || (isEnglish ? 'No category' : 'بدون تصنيف')} · {service.price} · {service.delivery_days} {isEnglish ? 'days' : 'يوم'}</p></div>
                 <div className="flex gap-2"><Button variant="outline" onClick={() => beginEdit(service)}><Pencil className="me-2 size-4" />{isEnglish ? 'Edit' : 'تعديل'}</Button><Button variant="destructive" disabled={busyId === service.id} onClick={() => remove(service)}><Trash2 className="me-2 size-4" />{isEnglish ? 'Delete' : 'حذف'}</Button></div>
               </CardContent></Card>
             ))}

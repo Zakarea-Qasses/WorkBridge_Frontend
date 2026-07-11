@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import {
@@ -20,10 +21,12 @@ import {
 } from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import { createService, getCategories, type Category } from '@/app/api/endpoints';
+import { categoryDisplayName } from '@/app/utils/categoryLabels';
 
 export default function CreateService() {
   const navigate = useNavigate();
   const { isEnglish, language } = useLanguage();
+  const BackIcon = isEnglish ? ArrowLeft : ArrowRight;
   const [categories, setCategories] = useState<Category[]>([]);
   const [formData, setFormData] = useState({
     title: '',
@@ -70,21 +73,43 @@ export default function CreateService() {
     }
   };
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/services');
+  };
+
   return (
     <DashboardLayout>
       <div className="mx-auto max-w-3xl space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
-        <div>
+        <div className="flex items-start justify-between gap-4">
+          <div>
           <h1 className="text-3xl font-bold">{isEnglish ? 'Publish a New Service' : 'نشر خدمة جديدة'}</h1>
           <p className="mt-1 text-muted-foreground">
             {isEnglish ? 'Add your service details so it appears in available services.' : 'أضف تفاصيل خدمتك لتظهر ضمن الخدمات المتاحة.'}
           </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={handleBack}
+            aria-label={isEnglish ? 'Back' : 'رجوع'}
+            title={isEnglish ? 'Back' : 'رجوع'}
+            className="shrink-0"
+          >
+            <BackIcon className="h-4 w-4" />
+          </Button>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>{isEnglish ? 'Service Details' : 'بيانات الخدمة'}</CardTitle>
             <CardDescription>
-              {isEnglish ? 'Service data is sent to the backend using the Laravel field names.' : 'سيتم إرسال بيانات الخدمة إلى الخادم بالحقول المطلوبة.'}
+              {isEnglish ? 'Add clear details so clients can understand your service.' : 'أضف تفاصيل واضحة ليتمكن العملاء من فهم خدمتك.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -112,7 +137,7 @@ export default function CreateService() {
                     <SelectContent>
                       {categories.map((category) => (
                         <SelectItem key={category.id} value={String(category.id)}>
-                          {category.name}
+                          {categoryDisplayName(category.name, isEnglish)}
                         </SelectItem>
                       ))}
                     </SelectContent>

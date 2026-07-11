@@ -30,6 +30,7 @@ import {
 } from '@/app/api/endpoints';
 import { getDashboardPathForUser, useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
+import { locationDisplayName } from '@/app/utils/locationLabels';
 import {
   Badge,
   Button,
@@ -131,11 +132,11 @@ function getJobLocation(job: JobPost, isEnglish: boolean) {
   const governorate = job.city?.governorate?.name;
 
   if (city && governorate) {
-    return `${city}، ${governorate}`;
+    return `${locationDisplayName(city, isEnglish)}, ${locationDisplayName(governorate, isEnglish)}`;
   }
 
   if (city || governorate) {
-    return city || governorate;
+    return locationDisplayName(city || governorate, isEnglish);
   }
 
   return isEnglish ? 'No city selected' : 'لم يتم تحديد مدينة';
@@ -239,15 +240,15 @@ export default function CompanyJobs() {
     () => ({
       title: isEnglish ? 'Manage jobs' : 'إدارة الوظائف',
       subtitle: isEnglish
-        ? 'Publish, edit, pause, activate, and delete your real company job posts.'
-        : 'نشر وتعديل وإيقاف وتفعيل وحذف وظائف الشركة الحقيقية.',
+        ? 'Publish, edit, pause, activate, and delete your company job posts.'
+        : 'نشر وتعديل وإيقاف وتفعيل وحذف وظائف الشركة.',
       loading: isEnglish ? 'Loading company jobs...' : 'جاري تحميل وظائف الشركة...',
       retry: isEnglish ? 'Retry' : 'إعادة المحاولة',
       createTitle: isEnglish ? 'Publish a new job' : 'نشر وظيفة جديدة',
       editTitle: isEnglish ? 'Edit job' : 'تعديل الوظيفة',
       formDescription: isEnglish
-        ? 'Only fields supported by the backend are sent.'
-        : 'يتم إرسال الحقول المدعومة من الباك فقط.',
+        ? 'Fill in the job details you want to publish.'
+        : 'املأ تفاصيل الوظيفة التي تريد نشرها.',
       jobTitle: isEnglish ? 'Job title' : 'عنوان الوظيفة',
       description: isEnglish ? 'Description' : 'الوصف',
       locationType: isEnglish ? 'Work type' : 'نوع الدوام',
@@ -259,8 +260,8 @@ export default function CompanyJobs() {
       cancel: isEnglish ? 'Cancel' : 'إلغاء',
       currentJobs: isEnglish ? 'Current postings' : 'الوظائف الحالية',
       currentDescription: isEnglish
-        ? 'Jobs returned from GET /company/jobs.'
-        : 'الوظائف الراجعة من GET /company/jobs.',
+        ? 'Your published company jobs.'
+        : 'وظائف الشركة المنشورة.',
       empty: isEnglish ? 'You have not added any jobs yet.' : 'لم تقم بإضافة وظائف حتى الآن',
       addJob: isEnglish ? 'Add job' : 'إضافة وظيفة',
       edit: isEnglish ? 'Edit' : 'تعديل',
@@ -278,9 +279,6 @@ export default function CompanyJobs() {
       deleteSuccess: isEnglish ? 'Job was deleted successfully.' : 'تم حذف الوظيفة بنجاح',
       activateSuccess: isEnglish ? 'Job was activated successfully.' : 'تم تفعيل الوظيفة بنجاح',
       pauseSuccess: isEnglish ? 'Job was paused successfully.' : 'تم إيقاف الوظيفة مؤقتاً',
-      missingLookups: isEnglish
-        ? 'This backend job API does not accept skills or categories for company jobs.'
-        : 'واجهة الوظائف في الباك لا تستقبل مهارات أو تصنيفات لوظائف الشركة حالياً.',
       previous: isEnglish ? 'Previous' : 'السابق',
       next: isEnglish ? 'Next' : 'التالي',
       page: isEnglish ? 'Page' : 'صفحة',
@@ -611,10 +609,6 @@ export default function CompanyJobs() {
           </Card>
         ) : null}
 
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="pt-6 text-sm text-primary">{labels.missingLookups}</CardContent>
-        </Card>
-
         <Card>
           <CardHeader>
             <CardTitle>{editingId ? labels.editTitle : labels.createTitle}</CardTitle>
@@ -671,7 +665,7 @@ export default function CompanyJobs() {
                     <SelectItem value={noneValue}>{isEnglish ? 'Not selected' : 'غير محدد'}</SelectItem>
                     {governorates.map((governorate) => (
                       <SelectItem key={governorate.id} value={String(governorate.id)}>
-                        {governorate.name}
+                        {locationDisplayName(governorate.name, isEnglish)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -692,7 +686,7 @@ export default function CompanyJobs() {
                     <SelectItem value={noneValue}>{isEnglish ? 'Not selected' : 'غير محدد'}</SelectItem>
                     {cities.map((city) => (
                       <SelectItem key={city.id} value={String(city.id)}>
-                        {city.name}
+                        {locationDisplayName(city.name, isEnglish)}
                       </SelectItem>
                     ))}
                   </SelectContent>

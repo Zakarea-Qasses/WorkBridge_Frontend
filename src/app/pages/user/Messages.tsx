@@ -208,8 +208,8 @@ export function MessagesPage({ userType = 'user' }: { userType?: 'user' | 'compa
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             {isEnglish
-              ? 'Admin conversation monitoring is not supported by the backend.'
-              : 'عرض جميع المحادثات للأدمن غير مدعوم من الباك حاليا.'}
+              ? 'Admin conversation monitoring is not available at the moment.'
+              : 'عرض جميع المحادثات للأدمن غير متاح حالياً.'}
           </CardContent>
         </Card>
       </DashboardLayout>
@@ -222,11 +222,6 @@ export function MessagesPage({ userType = 'user' }: { userType?: 'user' | 'compa
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">{isEnglish ? 'Messages' : 'المحادثات'}</h1>
-            <p className="text-sm text-muted-foreground">
-              {isEnglish
-                ? 'Follow your active conversations from the backend.'
-                : 'تابع محادثاتك الفعلية المرتبطة بالباك.'}
-            </p>
           </div>
           <Button
             variant="outline"

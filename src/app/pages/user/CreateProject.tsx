@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import {
@@ -26,10 +27,12 @@ import {
   type Category,
   type LocationOption,
 } from '@/app/api/endpoints';
+import { categoryDisplayName } from '@/app/utils/categoryLabels';
 
 export default function CreateProject() {
   const navigate = useNavigate();
   const { isEnglish, language } = useLanguage();
+  const BackIcon = isEnglish ? ArrowLeft : ArrowRight;
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [categories, setCategories] = useState<Category[]>([]);
@@ -118,21 +121,43 @@ export default function CreateProject() {
     }
   };
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/projects');
+  };
+
   return (
     <DashboardLayout>
       <div className="max-w-3xl space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
-        <div>
+        <div className="flex items-start justify-between gap-4">
+          <div>
           <h1 className="text-3xl font-bold">{isEnglish ? 'Create New Project' : 'إنشاء مشروع جديد'}</h1>
           <p className="mt-1 text-muted-foreground">
             {isEnglish ? 'Enter the details of the project you want to publish.' : 'أدخل تفاصيل المشروع الذي تريد نشره.'}
           </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={handleBack}
+            aria-label={isEnglish ? 'Back' : 'رجوع'}
+            title={isEnglish ? 'Back' : 'رجوع'}
+            className="shrink-0"
+          >
+            <BackIcon className="h-4 w-4" />
+          </Button>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>{isEnglish ? 'Project Details' : 'تفاصيل المشروع'}</CardTitle>
             <CardDescription>
-              {isEnglish ? 'Fields are submitted using the Laravel project API names.' : 'سيتم إرسال الحقول بالأسماء المطلوبة في الخادم.'}
+              {isEnglish ? 'Add enough details so applicants can send accurate offers.' : 'أضف تفاصيل كافية ليستطيع المتقدمون إرسال عروض دقيقة.'}
             </CardDescription>
           </CardHeader>
 
@@ -225,7 +250,7 @@ export default function CreateProject() {
                   <SelectContent>
                     {categories.map((category) => (
                       <SelectItem key={category.id} value={String(category.id)}>
-                        {category.name}
+                        {categoryDisplayName(category.name, isEnglish)}
                       </SelectItem>
                     ))}
                   </SelectContent>
