@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getApiErrorMessage, setUnauthorizedHandler } from '@/app/api/client';
-import * as api from '@/app/api/endpoints';
+import * as api from '@/app/api/pages/auth/session';
 import {
   clearStoredAuth,
   clearStoredVerificationEmail,

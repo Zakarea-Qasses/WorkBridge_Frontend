@@ -11,7 +11,7 @@ import {
   AccountUnderReview,
   CompanyPendingVerification,
 } from '@/app/pages/public/AccountStatus';
-import type { WorkBridgeUser } from '@/app/api/endpoints';
+import type { WorkBridgeUser } from '@/app/api/pages/auth/session';
 
 const RequestService = lazyPage(() => import('@/app/pages/user/RequestService'));
 const PublicProfile = lazyPage(() => import('@/app/pages/public/PublicProfile'));

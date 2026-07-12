@@ -13,7 +13,7 @@ import {
   CardTitle,
 } from '@/app/components/ui';
 import { getApiErrorMessage } from '@/app/api/client';
-import { AdminDashboardResponse, getAdminDashboard } from '@/app/api/endpoints';
+import { AdminDashboardResponse, getAdminDashboard } from '@/app/api/pages/admin/dashboard';
 
 function formatAmount(value: number | string | null | undefined, isEnglish: boolean) {
   const amount = Number(value);

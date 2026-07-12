@@ -13,7 +13,7 @@ import {
 import { FreshAuthLink, LanguageToggle } from '@/app/components/shared';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
-import { forgotPassword } from '@/app/api/endpoints';
+import { forgotPassword } from '@/app/api/pages/auth/forgotPassword';
 
 export default function ForgotPassword() {
   const { isEnglish, language } = useLanguage();

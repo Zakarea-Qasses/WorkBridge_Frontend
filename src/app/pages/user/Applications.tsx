@@ -12,12 +12,11 @@ import {
 import {
   acceptProjectApplication,
   getMyProjectApplications,
-  getMyServiceRequests,
   getReceivedProjectApplications,
   rejectProjectApplication,
   type ProjectApplication,
-  type ServiceRequest,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/user/applications';
+import { getMyServiceRequests, type ServiceRequest } from '@/app/api/pages/user/applications';
 import { getApiErrorMessage } from '@/app/api/client';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { formatUsd } from '@/app/utils/money';

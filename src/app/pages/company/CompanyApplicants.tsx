@@ -23,17 +23,18 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  useConfirmDialog,
 } from '@/app/components/ui';
 import { ApiError, getApiErrorMessage } from '@/app/api/client';
 import {
   getCompanyJobsPage,
   getJobApplications,
-  startConversation,
   updateJobApplicationStatus,
   type JobApplication,
   type JobApplicationStatus,
   type JobPost,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/company/applicants';
+import { startConversation } from '@/app/api/pages/company/applicants';
 import { getDashboardPathForUser, useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 
@@ -129,6 +130,11 @@ export default function CompanyApplicants() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const { confirm, ConfirmDialog } = useConfirmDialog({
+    title: isEnglish ? 'Confirm decision' : 'تأكيد القرار',
+    confirmLabel: isEnglish ? 'Confirm' : 'تأكيد',
+    cancelLabel: isEnglish ? 'Cancel' : 'إلغاء',
+  });
 
   const labels = useMemo(
     () => ({
@@ -265,7 +271,13 @@ export default function CompanyApplicants() {
     status: JobApplicationStatus,
   ) => {
     const confirmationMessage = status === 'accepted' ? labels.confirmAccept : labels.confirmReject;
-    if (!window.confirm(confirmationMessage)) {
+    const confirmed = await confirm({
+      title: status === 'accepted' ? labels.accept : labels.reject,
+      description: confirmationMessage,
+      confirmLabel: status === 'accepted' ? labels.accept : labels.reject,
+      destructive: status === 'rejected',
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -320,6 +332,7 @@ export default function CompanyApplicants() {
 
   return (
     <DashboardLayout userType="company">
+      <ConfirmDialog />
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>

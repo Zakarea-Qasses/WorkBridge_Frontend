@@ -147,13 +147,7 @@ export default function Login() {
               ) : null}
             </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="remember" className="rounded" />
-                <label htmlFor="remember" className="text-sm text-muted-foreground">
-                  {isEnglish ? 'Remember me' : 'تذكرني'}
-                </label>
-              </div>
+            <div className="flex justify-end">
               <Link to="/forgot-password" className="text-sm text-primary hover:underline">
                 {isEnglish ? 'Forgot password?' : 'نسيت كلمة المرور؟'}
               </Link>

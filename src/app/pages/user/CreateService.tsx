@@ -20,7 +20,8 @@ import {
   Textarea,
 } from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
-import { createService, getCategories, type Category } from '@/app/api/endpoints';
+import { getCategories, type Category } from '@/app/api/pages/user/createService';
+import { createService } from '@/app/api/pages/user/createService';
 import { categoryDisplayName } from '@/app/utils/categoryLabels';
 
 export default function CreateService() {

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { AlertCircle, Briefcase, Clock, LoaderCircle, RefreshCw, Search, Wallet } from 'lucide-react';
+import { AlertCircle, Briefcase, Clock, LoaderCircle, MessageSquare, RefreshCw, Search, Wallet } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui';
-import { createReport, getServices, type Service } from '@/app/api/endpoints';
+import { startConversation } from '@/app/api/pages/user/services';
+import { createReport } from '@/app/api/pages/user/services';
+import { getServices, type Service } from '@/app/api/pages/user/services';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { categoryDisplayName } from '@/app/utils/categoryLabels';
@@ -28,6 +30,7 @@ export default function Services() {
   const [categoryId, setCategoryId] = useState('all');
   const [loading, setLoading] = useState(true);
   const [reportingId, setReportingId] = useState<number | null>(null);
+  const [openingConversationId, setOpeningConversationId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -87,6 +90,22 @@ export default function Services() {
       setError(requestError instanceof Error ? requestError.message : (isEnglish ? 'Could not send report.' : 'تعذر إرسال البلاغ'));
     } finally {
       setReportingId(null);
+    }
+  };
+
+  const messageProvider = async (service: Service) => {
+    if (service.user_id === user?.id || openingConversationId) return;
+
+    try {
+      setOpeningConversationId(service.id);
+      setError('');
+      setMessage('');
+      const conversation = await startConversation(service.user_id);
+      navigate(`/messages?conversation=${conversation.id}`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : (isEnglish ? 'Unable to open conversation.' : 'تعذر فتح المحادثة'));
+    } finally {
+      setOpeningConversationId(null);
     }
   };
 
@@ -150,7 +169,18 @@ export default function Services() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <CardTitle className="text-lg">{service.title}</CardTitle>
-                      <p className="mt-1 text-sm text-muted-foreground">{service.user?.name || (isEnglish ? 'Unknown provider' : 'مقدم خدمة غير معروف')}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {service.user?.id && service.user.role === 'personal' ? (
+                          <Link
+                            to={`/freelancers/${service.user.id}`}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            {service.user.name}
+                          </Link>
+                        ) : (
+                          service.user?.name || (isEnglish ? 'Unknown provider' : 'مقدم خدمة غير معروف')
+                        )}
+                      </p>
                     </div>
                     {service.category ? <Badge variant="outline">{categoryDisplayName(service.category.name, isEnglish)}</Badge> : null}
                   </div>
@@ -165,6 +195,18 @@ export default function Services() {
                     {service.user_id !== user?.id ? (
                       <>
                         <Button onClick={() => navigate(`/services/${service.id}/request`)}>{isEnglish ? 'Request service' : 'طلب الخدمة'}</Button>
+                        <Button
+                          variant="outline"
+                          disabled={openingConversationId === service.id}
+                          onClick={() => void messageProvider(service)}
+                        >
+                          {openingConversationId === service.id ? (
+                            <LoaderCircle className="me-2 size-4 animate-spin" />
+                          ) : (
+                            <MessageSquare className="me-2 size-4" />
+                          )}
+                          {isEnglish ? 'Message' : 'محادثة'}
+                        </Button>
                         <Button
                           variant="outline"
                           disabled={reportingId === service.id}

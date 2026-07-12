@@ -19,7 +19,9 @@ import {
   SelectValue,
 } from '@/app/components/ui';
 import { getApiErrorMessage } from '@/app/api/client';
-import { createReport, getCategories, getProjects, type Category, type UserProject } from '@/app/api/endpoints';
+import { getCategories, type Category } from '@/app/api/pages/user/projects';
+import { getProjects, type UserProject } from '@/app/api/pages/user/projects';
+import { createReport } from '@/app/api/pages/user/projects';
 import { categoryDisplayName } from '@/app/utils/categoryLabels';
 
 type StatusMessage = { type: 'success' | 'error'; message: string } | null;
@@ -247,7 +249,17 @@ export default function Projects() {
                         <Badge variant="outline">{statusLabel(project.status, isEnglish)}</Badge>
                       </div>
                       <CardDescription className="text-sm">
-                        {isEnglish ? 'Posted by:' : 'الجهة الناشرة:'} {project.user?.name || (isEnglish ? 'Unknown' : 'غير معروف')}
+                        {isEnglish ? 'Posted by:' : 'الجهة الناشرة:'}{' '}
+                        {project.user?.id ? (
+                          <Link
+                            to={`/freelancers/${project.user.id}`}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            {project.user.name}
+                          </Link>
+                        ) : (
+                          isEnglish ? 'Unknown' : 'غير معروف'
+                        )}
                       </CardDescription>
                     </div>
                     <div className="rounded-md bg-muted px-4 py-2 text-sm">

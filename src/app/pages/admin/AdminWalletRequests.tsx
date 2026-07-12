@@ -31,7 +31,7 @@ import {
   type WalletRequest,
   type WalletRequestStatus,
   type WalletRequestType,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/admin/walletRequests';
 import { formatUsd } from '@/app/utils/money';
 
 function typeLabel(type: WalletRequestType, isEnglish: boolean) {

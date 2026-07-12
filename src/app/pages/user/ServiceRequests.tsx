@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router';
 import { CheckCircle2, MessageSquare, RefreshCw, XCircle } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui';
-import { acceptServiceRequest, getMyServiceRequests, getReceivedServiceRequests, rejectServiceRequest, startConversation, type ServiceRequest } from '@/app/api/endpoints';
+import { startConversation } from '@/app/api/pages/user/serviceRequests';
+import { acceptServiceRequest, getMyServiceRequests, getReceivedServiceRequests, rejectServiceRequest, type ServiceRequest } from '@/app/api/pages/user/serviceRequests';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 
 function statusLabel(status: ServiceRequest['status'], isEnglish: boolean) {

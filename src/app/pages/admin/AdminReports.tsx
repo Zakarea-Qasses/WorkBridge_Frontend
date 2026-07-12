@@ -25,7 +25,7 @@ import {
   ReportAttachment,
   ReportDecisionPayload,
   updateReportDecision,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/admin/reports';
 
 type StatusMessage = { type: 'success' | 'error'; message: string } | null;
 type ReportStatusFilter = 'all' | 'pending' | 'accepted' | 'rejected';

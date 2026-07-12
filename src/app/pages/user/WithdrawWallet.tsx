@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
-import { getMyWallet, requestWalletWithdraw } from '@/app/api/endpoints';
+import { getMyWallet, requestWalletWithdraw } from '@/app/api/pages/user/withdrawWallet';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { formatUsd, parsePositiveMoney, sanitizeMoneyInput } from '@/app/utils/money';
 import {

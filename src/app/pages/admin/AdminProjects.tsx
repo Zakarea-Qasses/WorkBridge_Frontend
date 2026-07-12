@@ -16,6 +16,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  useConfirmDialog,
 } from '@/app/components/ui';
 import { getApiErrorMessage } from '@/app/api/client';
 import {
@@ -39,7 +40,7 @@ import {
   updateAdminJobStatus,
   updateAdminProjectStatus,
   updateAdminServiceStatus,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/admin/content';
 import { categoryDisplayName } from '@/app/utils/categoryLabels';
 
 type StatusFilter = 'all' | AdminContentStatus;
@@ -166,6 +167,11 @@ export default function AdminProjects() {
   const [loading, setLoading] = useState(true);
   const [actingKey, setActingKey] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const { confirm, ConfirmDialog } = useConfirmDialog({
+    title: isEnglish ? 'Confirm action' : 'تأكيد العملية',
+    confirmLabel: isEnglish ? 'Confirm' : 'تأكيد',
+    cancelLabel: isEnglish ? 'Cancel' : 'إلغاء',
+  });
 
   const activeLabel = useMemo(() => {
     const type = contentTypes.find((item) => item.value === activeType);
@@ -261,11 +267,14 @@ export default function AdminProjects() {
   };
 
   const deleteItem = async (item: AdminContentItem) => {
-    const confirmed = window.confirm(
-      isEnglish
+    const confirmed = await confirm({
+      title: isEnglish ? 'Delete post' : 'حذف المنشور',
+      description: isEnglish
         ? `Delete "${item.title}" from content management?`
         : `هل تريد حذف "${item.title}" من إدارة المحتوى؟`,
-    );
+      confirmLabel: isEnglish ? 'Delete' : 'حذف',
+      destructive: true,
+    });
 
     if (!confirmed) {
       return;
@@ -358,11 +367,14 @@ export default function AdminProjects() {
   };
 
   const deleteCategory = async (category: Category) => {
-    const confirmed = window.confirm(
-      isEnglish
+    const confirmed = await confirm({
+      title: isEnglish ? 'Delete category' : 'حذف التصنيف',
+      description: isEnglish
         ? `Delete category "${categoryDisplayName(category.name, true)}"?`
         : `هل تريد حذف التصنيف "${categoryDisplayName(category.name, false)}"؟`,
-    );
+      confirmLabel: isEnglish ? 'Delete' : 'حذف',
+      destructive: true,
+    });
 
     if (!confirmed) return;
 
@@ -384,6 +396,7 @@ export default function AdminProjects() {
 
   return (
     <DashboardLayout userType="admin">
+      <ConfirmDialog />
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -735,3 +748,4 @@ export default function AdminProjects() {
     </DashboardLayout>
   );
 }
+

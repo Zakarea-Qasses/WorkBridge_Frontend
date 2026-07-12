@@ -4,7 +4,7 @@ import { Briefcase, Mail } from 'lucide-react';
 import { Button, Input } from '@/app/components/ui';
 import { FreshAuthLink, LanguageToggle } from '@/app/components/shared';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
-import * as api from '@/app/api/endpoints';
+import * as api from '@/app/api/pages/auth/emailVerification';
 import {
   clearStoredAuth,
   getStoredToken,

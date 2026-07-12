@@ -21,26 +21,23 @@ import {
   TabsList,
   TabsTrigger,
   Textarea,
+  useConfirmDialog,
 } from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import {
   type AdminSettings,
   clearSettingsLocalData,
-  type CompanyProfile,
   type ContactPermission,
   getAdminSettings,
-  getCompany,
-  getProfile,
   getUserSettings,
-  type PersonalProfileResponse,
   updateAdminSettings,
-  updateCompany,
   updateNotificationSettings,
   updatePassword,
   updatePrivacySettings,
-  updateProfile,
   type UserSettings,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/user/settings';
+import { type CompanyProfile, getCompany, updateCompany } from '@/app/api/pages/user/settings';
+import { getProfile, type PersonalProfileResponse, updateProfile } from '@/app/api/pages/user/settings';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 
@@ -186,6 +183,11 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
   const [status, setStatus] = useState<Status>(null);
   const [loading, setLoading] = useState(true);
   const [savingSection, setSavingSection] = useState<SavingSection>(null);
+  const { confirm, ConfirmDialog } = useConfirmDialog({
+    title: isEnglish ? 'Confirm action' : 'تأكيد العملية',
+    confirmLabel: isEnglish ? 'Confirm' : 'تأكيد',
+    cancelLabel: isEnglish ? 'Cancel' : 'إلغاء',
+  });
   const requestIdRef = useRef(0);
 
   const isAdmin = userType === 'admin';
@@ -393,11 +395,15 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
   };
 
   const clearBackendData = async () => {
-    const confirmed = window.confirm(
+    const confirmed = await confirm({
+      title: isEnglish ? 'Clear saved data' : 'حذف البيانات المحفوظة',
+      description:
       isEnglish
         ? 'Are you sure you want to clear the saved data for this setting?'
         : 'هل أنت متأكد من حذف البيانات المحفوظة لهذا الإعداد؟',
-    );
+      confirmLabel: isEnglish ? 'Clear data' : 'حذف البيانات',
+      destructive: true,
+    });
     if (!confirmed) return;
 
     try {
@@ -429,6 +435,7 @@ export function SettingsPage({ userType = 'user' }: { userType?: UserType }) {
 
   return (
     <DashboardLayout userType={userType}>
+      <ConfirmDialog />
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <div>
           <h1 className="text-3xl font-bold">{getTitle(userType, isEnglish)}</h1>

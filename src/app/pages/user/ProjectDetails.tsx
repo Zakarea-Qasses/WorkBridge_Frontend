@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, User, Wallet } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, MessageSquare, User, Wallet } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import {
@@ -17,7 +17,8 @@ import {
   Textarea,
 } from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
-import { applyToProject, getProject, type UserProject } from '@/app/api/endpoints';
+import { startConversation } from '@/app/api/pages/user/projectDetails';
+import { applyToProject, getProject, type UserProject } from '@/app/api/pages/user/projectDetails';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { categoryDisplayName } from '@/app/utils/categoryLabels';
 
@@ -80,6 +81,7 @@ export default function ProjectDetails() {
   const [project, setProject] = useState<UserProject | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [openingConversation, setOpeningConversation] = useState(false);
   const [status, setStatus] = useState<Status>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [proposalForm, setProposalForm] = useState({
@@ -180,6 +182,26 @@ export default function ProjectDetails() {
     navigate('/projects');
   };
 
+  const messageProjectOwner = async () => {
+    if (!project || project.user_id === user?.id || openingConversation) return;
+
+    try {
+      setOpeningConversation(true);
+      setStatus(null);
+      const conversation = await startConversation(project.user_id);
+      navigate(`/messages?conversation=${conversation.id}`);
+    } catch (messageError) {
+      setStatus({
+        type: 'error',
+        message:
+          getApiErrorMessage(messageError) ||
+          (isEnglish ? 'Unable to open the conversation.' : 'تعذر فتح المحادثة'),
+      });
+    } finally {
+      setOpeningConversation(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
@@ -245,7 +267,25 @@ export default function ProjectDetails() {
                         <span>{formatDate(project.created_at, isEnglish)}</span>
                       </div>
                     </div>
-                    <Badge className="bg-emerald-500">{statusLabel(project.status, isEnglish)}</Badge>
+                    <div className="flex flex-wrap gap-2">
+                      {project.user_id !== user?.id ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void messageProjectOwner()}
+                          disabled={openingConversation}
+                        >
+                          {openingConversation ? (
+                            <LoaderCircle className="me-2 size-4 animate-spin" />
+                          ) : (
+                            <MessageSquare className="me-2 size-4" />
+                          )}
+                          {isEnglish ? 'Message' : 'محادثة'}
+                        </Button>
+                      ) : null}
+                      <Badge className="bg-emerald-500">{statusLabel(project.status, isEnglish)}</Badge>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -399,7 +439,15 @@ export default function ProjectDetails() {
                       <User className="size-6 text-primary" />
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-semibold">{project.user?.name || (isEnglish ? 'Unknown' : 'غير معروف')}</h4>
+                      <h4 className="font-semibold">
+                        {project.user?.id ? (
+                          <Link to={`/freelancers/${project.user.id}`} className="text-primary hover:underline">
+                            {project.user.name}
+                          </Link>
+                        ) : (
+                          isEnglish ? 'Unknown' : 'غير معروف'
+                        )}
+                      </h4>
                       <p className="text-sm text-muted-foreground">{project.user?.role || ''}</p>
                     </div>
                   </div>

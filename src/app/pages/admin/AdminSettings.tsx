@@ -17,7 +17,7 @@ import {
   AdminSettings as AdminSettingsPayload,
   getAdminSettings,
   updateAdminSettings,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/admin/settings';
 
 type StatusMessage = { type: 'success' | 'error'; message: string } | null;
 

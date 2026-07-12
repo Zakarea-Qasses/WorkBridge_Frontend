@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, LoaderCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, LoaderCircle, Paperclip, RefreshCw } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import {
@@ -18,10 +18,34 @@ import {
   Textarea,
 } from '@/app/components/ui';
 import { getApiErrorMessage } from '@/app/api/client';
-import { getAllReports, Report, ReportDecisionPayload, updateReportDecision } from '@/app/api/endpoints';
+import {
+  getAllReports,
+  Report,
+  ReportAttachment,
+  ReportDecisionPayload,
+  updateReportDecision,
+} from '@/app/api/pages/admin/disputes';
 
 type StatusMessage = { type: 'success' | 'error'; message: string } | null;
-type AdminAction = NonNullable<ReportDecisionPayload['admin_action']> | 'none';
+type AdminAction = NonNullable<ReportDecisionPayload['admin_action']>;
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
+const BACKEND_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
+
+function attachmentLabel(attachment: ReportAttachment) {
+  if (typeof attachment === 'string') {
+    return attachment.split('/').filter(Boolean).pop() || attachment;
+  }
+  return attachment.name || attachment.path || attachment.url || 'Attachment';
+}
+
+function attachmentUrl(attachment: ReportAttachment) {
+  const value = typeof attachment === 'string' ? attachment : attachment.url || attachment.path || '';
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) return value;
+  const normalized = value.replace(/^\/+/, '');
+  return `${BACKEND_BASE_URL}/${normalized.startsWith('storage/') ? normalized : `storage/${normalized}`}`;
+}
 
 function formatAmount(value: number | string | null | undefined, isEnglish: boolean) {
   const amount = Number(value);
@@ -63,7 +87,7 @@ export default function AdminDisputes() {
   const [reports, setReports] = useState<Report[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [decisionNotes, setDecisionNotes] = useState<Record<number, string>>({});
-  const [adminActions, setAdminActions] = useState<Record<number, AdminAction>>({});
+  const [adminActions, setAdminActions] = useState<Record<number, AdminAction | undefined>>({});
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [status, setStatus] = useState<StatusMessage>(null);
@@ -104,13 +128,22 @@ export default function AdminDisputes() {
     try {
       setBusyId(report.id);
       setStatus(null);
-      const action = adminActions[report.id] || 'none';
+      const action = adminActions[report.id];
+      if (decision === 'accepted' && report.contract_id && !action) {
+        setStatus({
+          type: 'error',
+          message: isEnglish
+            ? 'Choose whether to refund the client or release the amount to the provider.'
+            : 'اختر إعادة المبلغ للعميل أو تحريره لمقدم الخدمة.',
+        });
+        return;
+      }
       const payload: ReportDecisionPayload = {
         status: decision,
         admin_decision: decisionNotes[report.id]?.trim() || null,
       };
 
-      if (decision === 'accepted' && report.contract_id && action !== 'none') {
+      if (decision === 'accepted' && report.contract_id && action) {
         payload.admin_action = action;
       }
 
@@ -285,6 +318,29 @@ export default function AdminDisputes() {
                         {selectedReport.contract_summary?.freelancer_name || '-'}
                       </p>
                     </div>
+                    {selectedReport.attachments?.length ? (
+                      <div className="mt-4 border-t pt-4">
+                        <p className="mb-2 font-medium">{isEnglish ? 'Evidence' : 'الأدلة المرفقة'}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedReport.attachments.map((attachment, index) => {
+                            const label = attachmentLabel(attachment);
+                            const url = attachmentUrl(attachment);
+                            return url ? (
+                              <a
+                                key={`${label}-${index}`}
+                                href={url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-primary hover:bg-primary/5"
+                              >
+                                <Paperclip className="size-4" />
+                                {label}
+                              </a>
+                            ) : null;
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
 
                   {selectedReport.status === 'pending' ? (
@@ -303,7 +359,7 @@ export default function AdminDisputes() {
 
                       {selectedReport.contract_id ? (
                         <Select
-                          value={adminActions[selectedReport.id] || 'none'}
+                          value={adminActions[selectedReport.id]}
                           onValueChange={(value) =>
                             setAdminActions((current) => ({
                               ...current,
@@ -312,10 +368,9 @@ export default function AdminDisputes() {
                           }
                         >
                           <SelectTrigger>
-                            <SelectValue />
+                            <SelectValue placeholder={isEnglish ? 'Choose financial decision' : 'اختر القرار المالي'} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="none">{isEnglish ? 'No financial action' : 'بدون إجراء مالي'}</SelectItem>
                             <SelectItem value="refund_client">
                               {isEnglish ? 'Refund client' : 'إرجاع المبلغ للعميل'}
                             </SelectItem>

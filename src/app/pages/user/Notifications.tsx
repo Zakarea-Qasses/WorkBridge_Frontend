@@ -12,7 +12,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
-import { Badge, Button, Card, CardContent } from '@/app/components/ui';
+import { Badge, Button, Card, CardContent, useConfirmDialog } from '@/app/components/ui';
 import { getApiErrorMessage } from '@/app/api/client';
 import {
   deleteNotification,
@@ -21,7 +21,7 @@ import {
   markAllNotificationsAsRead,
   markNotificationAsRead,
   type UserNotification,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/user/notifications';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 
@@ -229,6 +229,11 @@ export function NotificationsPage({ userType = 'user' }: { userType?: 'user' | '
   const [markingAll, setMarkingAll] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const { confirm, ConfirmDialog } = useConfirmDialog({
+    title: isEnglish ? 'Confirm action' : 'تأكيد العملية',
+    confirmLabel: isEnglish ? 'Confirm' : 'تأكيد',
+    cancelLabel: isEnglish ? 'Cancel' : 'إلغاء',
+  });
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -321,11 +326,13 @@ export function NotificationsPage({ userType = 'user' }: { userType?: 'user' | '
   };
 
   const remove = async (notification: UserNotification) => {
-    if (
-      !window.confirm(
-        isEnglish ? 'Are you sure you want to delete this notification?' : 'هل أنت متأكد من حذف هذا الإشعار؟',
-      )
-    ) {
+    const confirmed = await confirm({
+      title: isEnglish ? 'Delete notification' : 'حذف الإشعار',
+      description: isEnglish ? 'Are you sure you want to delete this notification?' : 'هل أنت متأكد من حذف هذا الإشعار؟',
+      confirmLabel: isEnglish ? 'Delete' : 'حذف',
+      destructive: true,
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -351,6 +358,7 @@ export function NotificationsPage({ userType = 'user' }: { userType?: 'user' | '
 
   return (
     <DashboardLayout userType={userType}>
+      <ConfirmDialog />
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -476,3 +484,4 @@ export function NotificationsPage({ userType = 'user' }: { userType?: 'user' | '
 export default function Notifications() {
   return <NotificationsPage />;
 }
+

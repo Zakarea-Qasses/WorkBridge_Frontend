@@ -25,7 +25,7 @@ import {
   markAdminUserUnderReview,
   type AdminReviewUser,
   type PaginatedResponse,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/admin/users';
 
 type StatusFilter = 'all' | 'active' | 'under_review' | 'inactive';
 type StatusMessage = { type: 'success' | 'error'; message: string } | null;

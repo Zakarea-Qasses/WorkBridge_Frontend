@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { AlertCircle, LoaderCircle, Wallet as WalletIcon } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, LoaderCircle, Wallet as WalletIcon } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import {
   Button,
@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
-import { getMyWallet, requestWalletWithdraw } from '@/app/api/endpoints';
+import { getMyWallet, requestWalletWithdraw } from '@/app/api/pages/company/withdrawWallet';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { formatUsd, parsePositiveMoney, sanitizeMoneyInput } from '@/app/utils/money';
 import {
@@ -43,6 +43,7 @@ function formatBalance(value: number | string | null, isEnglish: boolean) {
 export default function CompanyWithdrawWallet() {
   const { language, isEnglish } = useLanguage();
   const navigate = useNavigate();
+  const BackIcon = isEnglish ? ArrowLeft : ArrowRight;
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<WalletPaymentMethod>(DEFAULT_WALLET_PAYMENT_METHOD);
   const [balance, setBalance] = useState<number | null>(null);
@@ -118,6 +119,15 @@ export default function CompanyWithdrawWallet() {
     }
   };
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/company/wallet');
+  };
+
   return (
     <DashboardLayout userType="company">
       <div className="mx-auto max-w-2xl space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
@@ -132,7 +142,17 @@ export default function CompanyWithdrawWallet() {
                 : 'أرسل طلب سحب ليتم مراجعته من الأدمن.'}
             </p>
           </div>
-          <Button asChild variant="outline">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={handleBack}
+            aria-label={isEnglish ? 'Back' : 'رجوع'}
+            title={isEnglish ? 'Back' : 'رجوع'}
+          >
+            <BackIcon className="h-4 w-4" />
+          </Button>
+          <Button asChild variant="outline" className="hidden">
             <Link to="/company/wallet">{isEnglish ? 'Back to company wallet' : 'العودة إلى محفظة الشركة'}</Link>
           </Button>
         </div>

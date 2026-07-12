@@ -13,7 +13,7 @@ import {
 } from '@/app/components/ui';
 import { LanguageToggle } from '@/app/components/shared';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
-import { resetPassword } from '@/app/api/endpoints';
+import { resetPassword } from '@/app/api/pages/auth/resetPassword';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 
 export default function ResetPassword() {

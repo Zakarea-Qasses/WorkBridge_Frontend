@@ -18,7 +18,7 @@ import {
   Textarea,
 } from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
-import { requestWalletDeposit } from '@/app/api/endpoints';
+import { requestWalletDeposit } from '@/app/api/pages/user/topUpWallet';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { parsePositiveMoney, sanitizeMoneyInput } from '@/app/utils/money';
 import {

@@ -11,7 +11,7 @@ import {
   sendConversationMessage,
   type Conversation,
   type ConversationMessage,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/user/messages';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 

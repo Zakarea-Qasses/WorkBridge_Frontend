@@ -14,7 +14,7 @@ import {
 import DashboardLayout from '@/app/components/layout';
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui';
 import { ApiError } from '@/app/api/client';
-import { getPersonalDashboard, PersonalDashboardResponse } from '@/app/api/endpoints';
+import { getPersonalDashboard, PersonalDashboardResponse } from '@/app/api/pages/user/dashboard';
 import { getDashboardPathForUser, useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { categoryDisplayName } from '@/app/utils/categoryLabels';

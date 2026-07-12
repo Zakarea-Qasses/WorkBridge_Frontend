@@ -30,7 +30,8 @@ import {
 import { LanguageToggle } from '@/app/components/shared';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { useAuth } from '@/app/providers/AuthProvider';
-import { getConversations, getUnreadNotificationCount } from '@/app/api/endpoints';
+import { getConversations } from '@/app/api/pages/user/messages';
+import { getUnreadNotificationCount } from '@/app/api/pages/user/notifications';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;

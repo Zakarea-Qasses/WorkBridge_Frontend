@@ -31,7 +31,7 @@ import {
   WalletTransaction,
   getAdminTransactionsWallet,
   getEscrowTransactionsWallet,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/admin/siteWallet';
 import { formatUsd } from '@/app/utils/money';
 
 function toAmount(value: number | string | null | undefined) {

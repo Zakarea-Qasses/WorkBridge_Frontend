@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { AlertCircle, CreditCard, LoaderCircle, Upload, Wallet } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, CreditCard, LoaderCircle, Upload, Wallet } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import {
@@ -20,7 +20,7 @@ import {
   Textarea,
 } from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
-import { requestWalletDeposit } from '@/app/api/endpoints';
+import { requestWalletDeposit } from '@/app/api/pages/company/topUpWallet';
 import { parsePositiveMoney, sanitizeMoneyInput } from '@/app/utils/money';
 import {
   buildWalletRequestText,
@@ -32,6 +32,7 @@ import {
 export default function CompanyTopUpWallet() {
   const { language, isEnglish } = useLanguage();
   const navigate = useNavigate();
+  const BackIcon = isEnglish ? ArrowLeft : ArrowRight;
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<WalletPaymentMethod>(DEFAULT_WALLET_PAYMENT_METHOD);
   const [paymentNote, setPaymentNote] = useState('');
@@ -104,6 +105,15 @@ export default function CompanyTopUpWallet() {
     }
   };
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/company/wallet');
+  };
+
   return (
     <DashboardLayout userType="company">
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
@@ -116,7 +126,17 @@ export default function CompanyTopUpWallet() {
                 : 'أرسل طلب شحن محفظة الشركة ليتم مراجعته من الأدمن.'}
             </p>
           </div>
-          <Button asChild variant="outline">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={handleBack}
+            aria-label={isEnglish ? 'Back' : 'رجوع'}
+            title={isEnglish ? 'Back' : 'رجوع'}
+          >
+            <BackIcon className="h-4 w-4" />
+          </Button>
+          <Button asChild variant="outline" className="hidden">
             <Link to="/company/wallet">{isEnglish ? 'Back to wallet' : 'العودة إلى المحفظة'}</Link>
           </Button>
         </div>

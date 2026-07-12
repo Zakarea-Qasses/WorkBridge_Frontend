@@ -5,7 +5,7 @@ import {
   getDashboardPathForUser,
   useAuth,
 } from '@/app/providers/AuthProvider';
-import type { WorkBridgeUser } from '@/app/api/endpoints';
+import type { WorkBridgeUser } from '@/app/api/pages/auth/session';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;

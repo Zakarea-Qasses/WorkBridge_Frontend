@@ -14,12 +14,14 @@ import DashboardLayout from '@/app/components/layout';
 import { ApiError, getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import {
   CompanyProfile as CompanyProfileData,
-  getCitiesByGovernorate,
   getCompany,
+  updateCompany,
+} from '@/app/api/pages/company/profile';
+import {
+  getCitiesByGovernorate,
   getGovernorates,
   LocationOption,
-  updateCompany,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/company/profile';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { getDashboardPathForUser, useAuth } from '@/app/providers/AuthProvider';
 import { locationDisplayName } from '@/app/utils/locationLabels';

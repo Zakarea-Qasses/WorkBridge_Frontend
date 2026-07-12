@@ -26,7 +26,7 @@ import {
   requestAdminCompanyDocuments,
   unverifyAdminCompany,
   verifyAdminCompany,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/admin/verification';
 
 type CompanyStatusFilter = 'all' | 'pending' | 'verified' | 'documents_requested';
 type Feedback = { type: 'success' | 'error'; message: string } | null;

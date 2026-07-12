@@ -31,7 +31,7 @@ import {
   type Wallet,
   type WalletRequest,
   type WalletTransaction,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/company/wallet';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { formatUsd } from '@/app/utils/money';
 

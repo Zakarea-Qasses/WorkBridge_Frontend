@@ -16,7 +16,7 @@ import {
   getMyServiceRequestsPage,
   type PaginatedResponse,
   type ServiceRequest,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/company/serviceRequests';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 

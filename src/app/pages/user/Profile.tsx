@@ -22,7 +22,7 @@ import {
   Textarea,
 } from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
-import { getProfile, PersonalProfile, updateProfile } from '@/app/api/endpoints';
+import { getProfile, PersonalProfile, updateProfile } from '@/app/api/pages/user/profile';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 

@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { LoaderCircle, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea } from '@/app/components/ui';
+import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, useConfirmDialog } from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
-import { deleteService, getCategories, getServices, updateService, type Category, type Service } from '@/app/api/endpoints';
+import { getCategories, type Category } from '@/app/api/pages/user/myServices';
+import { deleteService, getServices, updateService, type Service } from '@/app/api/pages/user/myServices';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { categoryDisplayName } from '@/app/utils/categoryLabels';
@@ -20,6 +21,11 @@ export default function MyServices() {
   const [feedback, setFeedback] = useState('');
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const { confirm, ConfirmDialog } = useConfirmDialog({
+    title: isEnglish ? 'Confirm action' : 'تأكيد العملية',
+    confirmLabel: isEnglish ? 'Confirm' : 'تأكيد',
+    cancelLabel: isEnglish ? 'Cancel' : 'إلغاء',
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -75,7 +81,12 @@ export default function MyServices() {
   };
 
   const remove = async (service: Service) => {
-    const confirmed = window.confirm(isEnglish ? 'Are you sure you want to delete this service?' : 'هل أنت متأكد من حذف هذه الخدمة؟');
+    const confirmed = await confirm({
+      title: isEnglish ? 'Delete service' : 'حذف الخدمة',
+      description: isEnglish ? 'Are you sure you want to delete this service?' : 'هل أنت متأكد من حذف هذه الخدمة؟',
+      confirmLabel: isEnglish ? 'Delete' : 'حذف',
+      destructive: true,
+    });
     if (!confirmed) return;
     try {
       setBusyId(service.id);
@@ -91,6 +102,7 @@ export default function MyServices() {
 
   return (
     <DashboardLayout>
+      <ConfirmDialog />
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div><h1 className="text-3xl font-bold">{isEnglish ? 'My Services' : 'خدماتي'}</h1><p className="mt-1 text-muted-foreground">{isEnglish ? 'Manage services published by your account.' : 'إدارة الخدمات المنشورة من حسابك.'}</p></div>
@@ -131,3 +143,4 @@ export default function MyServices() {
     </DashboardLayout>
   );
 }
+

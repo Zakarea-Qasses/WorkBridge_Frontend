@@ -12,16 +12,17 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
+  useConfirmDialog,
 } from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import {
-  createReview,
-  deleteReview,
   getContract,
   type Contract,
+  createReview,
+  deleteReview,
   type ProfileReview,
   updateReview,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/user/contractReview';
 
 interface ContractReviewPanelProps {
   contract: Contract;
@@ -54,6 +55,11 @@ export default function ContractReviewPanel({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const { confirm, ConfirmDialog } = useConfirmDialog({
+    title: isEnglish ? 'Confirm action' : 'تأكيد العملية',
+    confirmLabel: isEnglish ? 'Confirm' : 'تأكيد',
+    cancelLabel: isEnglish ? 'Cancel' : 'إلغاء',
+  });
 
   const activeContract = loadedContract || contract;
   const myReview = useMemo(
@@ -142,9 +148,12 @@ export default function ContractReviewPanel({
   const removeReview = async () => {
     if (!myReview) return;
 
-    const confirmed = window.confirm(
-      isEnglish ? 'Delete your review?' : 'هل تريد حذف تقييمك؟',
-    );
+    const confirmed = await confirm({
+      title: isEnglish ? 'Delete review' : 'حذف التقييم',
+      description: isEnglish ? 'Delete your review?' : 'هل تريد حذف تقييمك؟',
+      confirmLabel: isEnglish ? 'Delete' : 'حذف',
+      destructive: true,
+    });
     if (!confirmed) return;
 
     try {
@@ -173,6 +182,7 @@ export default function ContractReviewPanel({
 
   return (
     <Card className="border-primary/20 bg-primary/5">
+      <ConfirmDialog />
       <CardContent className="space-y-4 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
@@ -269,3 +279,4 @@ export default function ContractReviewPanel({
     </Card>
   );
 }
+

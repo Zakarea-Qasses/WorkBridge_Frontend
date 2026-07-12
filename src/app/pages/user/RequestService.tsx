@@ -10,7 +10,7 @@ import {
   requestService,
   type Service,
   type ServiceRequest,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/user/requestService';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 
@@ -157,7 +157,7 @@ export default function RequestService() {
                 <Button className="w-full" disabled={submitting}>{submitting ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}{submitting ? (isEnglish ? 'Sending...' : 'جار الإرسال...') : (isEnglish ? 'Send Request' : 'إرسال الطلب')}</Button>
               </form>
             </CardContent></Card>
-            <Card><CardHeader><CardTitle>{service.title}</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><p className="text-muted-foreground">{service.description || (isEnglish ? 'No description.' : 'لا يوجد وصف.')}</p><p>{isEnglish ? 'Provider:' : 'مقدم الخدمة:'} {service.user?.name}</p><p>{isEnglish ? 'Price:' : 'السعر:'} {service.price}</p><p>{isEnglish ? 'Default delivery:' : 'مدة التسليم:'} {service.delivery_days} {isEnglish ? 'days' : 'يوم'}</p></CardContent></Card>
+            <Card><CardHeader><CardTitle>{service.title}</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><p className="text-muted-foreground">{service.description || (isEnglish ? 'No description.' : 'لا يوجد وصف.')}</p><p>{isEnglish ? 'Provider:' : 'مقدم الخدمة:'}{' '}{service.user?.id && service.user.role === 'personal' ? <Link to={`/freelancers/${service.user.id}`} className="font-medium text-primary hover:underline">{service.user.name}</Link> : service.user?.name}</p><p>{isEnglish ? 'Price:' : 'السعر:'} {service.price}</p><p>{isEnglish ? 'Default delivery:' : 'مدة التسليم:'} {service.delivery_days} {isEnglish ? 'days' : 'يوم'}</p></CardContent></Card>
           </div>
         )}
       </div>

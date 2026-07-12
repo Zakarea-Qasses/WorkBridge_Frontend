@@ -14,17 +14,17 @@ import {
 } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import ContractReviewPanel from '@/app/components/contracts/ContractReviewPanel';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, useConfirmDialog } from '@/app/components/ui';
 import { ApiError, getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import {
   cancelContract,
   completeContract,
   getCompanyContractsPage,
   startContract,
-  startConversation,
   type Contract,
   type PaginatedResponse,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/company/contracts';
+import { startConversation } from '@/app/api/pages/company/contracts';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 
@@ -159,6 +159,11 @@ export default function CompanyContracts() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [needsWalletTopUp, setNeedsWalletTopUp] = useState(false);
+  const { confirm, ConfirmDialog } = useConfirmDialog({
+    title: isEnglish ? 'Confirm action' : 'تأكيد العملية',
+    confirmLabel: isEnglish ? 'Confirm' : 'تأكيد',
+    cancelLabel: isEnglish ? 'Cancel' : 'إلغاء',
+  });
 
   const load = useCallback(async () => {
     const requestId = requestIdRef.current + 1;
@@ -211,7 +216,15 @@ export default function CompanyContracts() {
             ? 'Cancel this contract?'
             : 'هل تريد إلغاء هذا العقد؟';
 
-    if (!window.confirm(confirmMessage)) return;
+    const confirmed = await confirm({
+      title:
+        action === 'cancel'
+          ? isEnglish ? 'Cancel contract' : 'إلغاء العقد'
+          : isEnglish ? 'Confirm contract action' : 'تأكيد إجراء العقد',
+      description: confirmMessage,
+      destructive: action === 'cancel',
+    });
+    if (!confirmed) return;
 
     try {
       setBusyId(contract.id);
@@ -271,6 +284,7 @@ export default function CompanyContracts() {
 
   return (
     <DashboardLayout userType="company">
+      <ConfirmDialog />
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>

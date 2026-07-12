@@ -6,7 +6,7 @@ import {
   getMyJobApplications,
   type JobApplication,
   type JobApplicationStatus,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/user/jobApplicationsList';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui';
 
 const statusClasses: Record<JobApplicationStatus, string> = {

@@ -27,7 +27,7 @@ import {
   ReportAttachment,
   ReportCategory,
   ReportPriority,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/user/supportCenter';
 import { useAuth } from '@/app/providers/AuthProvider';
 
 interface SupportForm {
@@ -347,7 +347,7 @@ export default function SupportCenter() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {(['support', 'complaint', 'dispute', 'payment', 'technical'] as const).map(
+                        {(['support', 'complaint', 'payment', 'technical'] as const).map(
                           (category) => (
                             <SelectItem key={category} value={category}>
                               {categoryLabel(category, isEnglish)}

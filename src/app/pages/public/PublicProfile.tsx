@@ -23,10 +23,12 @@ import { getApiErrorMessage } from '@/app/api/client';
 import {
   getPublicProfile,
   getProfile,
-  getUserReviews,
   PersonalProfile,
+} from '@/app/api/pages/public/publicProfile';
+import {
+  getUserReviews,
   ProfileReview,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/public/publicProfile';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 

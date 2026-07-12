@@ -16,19 +16,27 @@ import {
 import { ApiError, getApiErrorMessage } from '@/app/api/client';
 import {
   type CompanyDashboardResponse,
+  getCompanyDashboard,
+} from '@/app/api/pages/company/dashboard';
+import {
   type CompanyProfile,
+  getCompany,
+} from '@/app/api/pages/company/dashboard';
+import {
   type Contract,
+  getCompanyContractsPage,
+} from '@/app/api/pages/company/dashboard';
+import {
   type JobApplication,
   type JobPost,
-  getCompanyContractsPage,
-  getCompanyDashboard,
   getCompanyJobsPage,
-  getCompany,
   getJobApplications,
+} from '@/app/api/pages/company/dashboard';
+import {
   getMyServiceRequestsPage,
-  getMyWallet,
   type ServiceRequest,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/company/dashboard';
+import { getMyWallet } from '@/app/api/pages/company/dashboard';
 import DashboardLayout from '@/app/components/layout';
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui';
 import { getDashboardPathForUser, useAuth } from '@/app/providers/AuthProvider';

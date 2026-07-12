@@ -21,11 +21,11 @@ import {
 import { getApiErrorMessage } from '@/app/api/client';
 import {
   applyToJob,
-  createReport,
   getJobs,
   getMyJobApplications,
   type JobPost,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/user/jobs';
+import { createReport } from '@/app/api/pages/user/jobs';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 
 const JOBS_PER_PAGE = 6;

@@ -17,17 +17,15 @@ import {
   activateJob,
   createJob,
   deleteJob,
-  getCitiesByGovernorate,
   getCompanyJobsPage,
-  getGovernorates,
   getJob,
   JobPayload,
   JobPost,
-  LocationOption,
   PaginatedResponse,
   pauseJob,
   updateJob,
-} from '@/app/api/endpoints';
+} from '@/app/api/pages/company/jobs';
+import { getCitiesByGovernorate, getGovernorates, LocationOption } from '@/app/api/pages/company/jobs';
 import { getDashboardPathForUser, useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { locationDisplayName } from '@/app/utils/locationLabels';
@@ -46,6 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
+  useConfirmDialog,
 } from '@/app/components/ui';
 
 type JobStatus = 'active' | 'paused' | 'closed' | string;
@@ -232,6 +231,11 @@ export default function CompanyJobs() {
   const [status, setStatus] = useState<StatusMessage>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [page, setPage] = useState(1);
+  const { confirm, ConfirmDialog } = useConfirmDialog({
+    title: isEnglish ? 'Confirm action' : 'تأكيد العملية',
+    confirmLabel: isEnglish ? 'Confirm' : 'تأكيد',
+    cancelLabel: isEnglish ? 'Cancel' : 'إلغاء',
+  });
 
   const isCompanyUser = user?.role === 'company';
   const activeCompanyId = user?.company?.id ?? null;
@@ -461,7 +465,17 @@ export default function CompanyJobs() {
   };
 
   const handleDelete = async (job: JobPost) => {
-    if (!window.confirm(labels.confirmDelete) || actionId) {
+    if (actionId) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: labels.delete,
+      description: labels.confirmDelete,
+      confirmLabel: labels.delete,
+      destructive: true,
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -563,22 +577,13 @@ export default function CompanyJobs() {
 
   return (
     <DashboardLayout userType="company">
+      <ConfirmDialog />
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
         <section className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="text-3xl font-bold">{labels.title}</h2>
             <p className="mt-2 text-muted-foreground">{labels.subtitle}</p>
           </div>
-          <Button
-            type="button"
-            onClick={() => {
-              resetDraft();
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-          >
-            <Plus className="me-2 h-4 w-4" />
-            {labels.addJob}
-          </Button>
         </section>
 
         {status ? (
