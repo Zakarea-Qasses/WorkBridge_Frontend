@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { LoaderCircle, MessageSquare, RefreshCw, Search } from 'lucide-react';
+import { ClipboardList, LoaderCircle, MessageSquare, RefreshCw, Search, Star } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { Badge, Button, Card, CardContent, Input } from '@/app/components/ui';
 import { startConversation } from '@/app/api/pages/company/services';
@@ -9,6 +9,7 @@ import { getServices, type Service } from '@/app/api/pages/company/services';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { categoryDisplayName } from '@/app/utils/categoryLabels';
+import { formatUsd } from '@/app/utils/money';
 
 export default function CompanyServices() {
   const { isEnglish, language } = useLanguage();
@@ -134,7 +135,28 @@ export default function CompanyServices() {
                     {service.category ? <Badge variant="outline">{categoryDisplayName(service.category.name, isEnglish)}</Badge> : null}
                   </div>
                   <p className="text-sm text-muted-foreground">{service.description || (isEnglish ? 'No description.' : 'لا يوجد وصف.')}</p>
-                  <div className="flex gap-4 text-sm"><span>{service.price}</span><span>{service.delivery_days} {isEnglish ? 'days' : 'يوم'}</span></div>
+                  <div className="flex flex-wrap gap-4 text-sm">
+                    <span>{formatUsd(service.price, isEnglish ? 'en' : 'ar')}</span>
+                    <span>{service.delivery_days} {isEnglish ? 'days' : 'يوم'}</span>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-md border bg-amber-50 p-3">
+                      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Star className="size-4 fill-amber-400 text-amber-500" />
+                        {isEnglish ? 'Provider rating' : 'تقييم مقدم الخدمة'}
+                      </p>
+                      <p className="mt-1 text-xl font-bold text-foreground">
+                        {Number(service.rating_avg || 0).toFixed(1)} / 5
+                      </p>
+                    </div>
+                    <div className="rounded-md border bg-primary/5 p-3">
+                      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <ClipboardList className="size-4 text-primary" />
+                        {isEnglish ? 'Orders count' : 'عدد الطلبات'}
+                      </p>
+                      <p className="mt-1 text-xl font-bold text-foreground">{service.orders_count ?? 0}</p>
+                    </div>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     <Button onClick={() => navigate(`/services/${service.id}/request`)}>
                       {isEnglish ? 'Apply for service' : 'تقديم على الخدمة'}

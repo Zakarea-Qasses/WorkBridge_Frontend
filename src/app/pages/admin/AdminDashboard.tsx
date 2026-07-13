@@ -14,13 +14,10 @@ import {
 } from '@/app/components/ui';
 import { getApiErrorMessage } from '@/app/api/client';
 import { AdminDashboardResponse, getAdminDashboard } from '@/app/api/pages/admin/dashboard';
+import { formatUsd } from '@/app/utils/money';
 
 function formatAmount(value: number | string | null | undefined, isEnglish: boolean) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return isEnglish ? 'Unavailable' : 'غير متوفر';
-  return new Intl.NumberFormat(isEnglish ? 'en' : 'ar', {
-    maximumFractionDigits: 2,
-  }).format(amount);
+  return formatUsd(value, isEnglish ? 'en' : 'ar');
 }
 
 function formatDate(value: string | undefined, isEnglish: boolean) {

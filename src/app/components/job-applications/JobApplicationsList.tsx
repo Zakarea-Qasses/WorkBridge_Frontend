@@ -8,6 +8,7 @@ import {
   type JobApplicationStatus,
 } from '@/app/api/pages/user/jobApplicationsList';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui';
+import { formatUsd } from '@/app/utils/money';
 
 const statusClasses: Record<JobApplicationStatus, string> = {
   pending: 'border-amber-200 bg-amber-50 text-amber-800',
@@ -158,7 +159,7 @@ export default function JobApplicationsList({ isEnglish }: { isEnglish: boolean 
                 </span>
                 {job?.salary != null ? (
                   <span>
-                    {isEnglish ? 'Salary:' : 'الراتب:'} {job.salary}
+                    {isEnglish ? 'Salary:' : 'الراتب:'} {formatUsd(job.salary, isEnglish ? 'en' : 'ar')}
                   </span>
                 ) : null}
               </div>

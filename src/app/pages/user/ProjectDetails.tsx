@@ -21,15 +21,12 @@ import { startConversation } from '@/app/api/pages/user/projectDetails';
 import { applyToProject, getProject, type UserProject } from '@/app/api/pages/user/projectDetails';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { categoryDisplayName } from '@/app/utils/categoryLabels';
+import { formatUsd, sanitizePositiveIntegerInput, sanitizePositiveMoneyInput } from '@/app/utils/money';
 
 type Status = { type: 'success' | 'error'; message: string } | null;
 
 function formatBudget(value: number | string, isEnglish: boolean) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return isEnglish ? 'Budget unavailable' : 'الميزانية غير متاحة';
-  return new Intl.NumberFormat(isEnglish ? 'en' : 'ar', {
-    maximumFractionDigits: 0,
-  }).format(amount);
+  return formatUsd(value, isEnglish ? 'en' : 'ar');
 }
 
 function formatDate(value: string, isEnglish: boolean) {
@@ -296,24 +293,6 @@ export default function ProjectDetails() {
                     </p>
                   </div>
 
-                  <Separator />
-
-                  <div>
-                    <h3 className="mb-3 font-semibold">{isEnglish ? 'Required Skills' : 'المهارات المطلوبة'}</h3>
-                    {project.skills?.length ? (
-                      <div className="flex flex-wrap gap-2">
-                        {project.skills.map((skill) => (
-                          <Badge key={skill.id} variant="outline">
-                            {skill.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        {isEnglish ? 'No skills listed.' : 'لا توجد مهارات محددة.'}
-                      </p>
-                    )}
-                  </div>
                 </CardContent>
               </Card>
 
@@ -331,15 +310,16 @@ export default function ProjectDetails() {
                     <form className="space-y-4" onSubmit={handleSubmitProposal}>
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
-                          <Label htmlFor="price">{isEnglish ? 'Offer value' : 'قيمة العرض'}</Label>
+                          <Label htmlFor="price">{isEnglish ? 'Offer value ($)' : 'قيمة العرض ($)'}</Label>
                           <Input
                             id="price"
-                            type="number"
-                            min="1"
+                            type="text"
+                            inputMode="decimal"
                             value={proposalForm.price}
                             onChange={(event) =>
-                              setProposalForm((current) => ({ ...current, price: event.target.value }))
+                              setProposalForm((current) => ({ ...current, price: sanitizePositiveMoneyInput(event.target.value) }))
                             }
+                            placeholder="$0.00"
                           />
                           {fieldErrors.price?.[0] ? (
                             <p className="text-xs text-destructive">{fieldErrors.price[0]}</p>
@@ -349,11 +329,11 @@ export default function ProjectDetails() {
                           <Label htmlFor="duration_days">{isEnglish ? 'Duration in days' : 'مدة التنفيذ بالأيام'}</Label>
                           <Input
                             id="duration_days"
-                            type="number"
-                            min="1"
+                            type="text"
+                            inputMode="numeric"
                             value={proposalForm.duration_days}
                             onChange={(event) =>
-                              setProposalForm((current) => ({ ...current, duration_days: event.target.value }))
+                              setProposalForm((current) => ({ ...current, duration_days: sanitizePositiveIntegerInput(event.target.value) }))
                             }
                           />
                           {fieldErrors.duration_days?.[0] ? (

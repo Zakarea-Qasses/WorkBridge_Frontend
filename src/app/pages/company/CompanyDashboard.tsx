@@ -38,6 +38,7 @@ import {
 } from '@/app/api/pages/company/dashboard';
 import { getMyWallet } from '@/app/api/pages/company/dashboard';
 import DashboardLayout from '@/app/components/layout';
+import { formatUsd } from '@/app/utils/money';
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui';
 import { getDashboardPathForUser, useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
@@ -133,10 +134,7 @@ function formatNumber(value: number, isEnglish: boolean) {
 
 function formatMoney(value: number | null, isEnglish: boolean) {
   if (value === null) return isEnglish ? 'Unavailable' : 'غير متاح';
-  return new Intl.NumberFormat(isEnglish ? 'en' : 'ar', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
+  return formatUsd(value, isEnglish ? 'en' : 'ar');
 }
 
 function formatDate(value: string | null | undefined, isEnglish: boolean) {

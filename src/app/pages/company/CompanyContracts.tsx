@@ -9,16 +9,19 @@ import {
   MessageSquare,
   PlayCircle,
   RefreshCw,
+  ShieldAlert,
   User,
   XCircle,
 } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import ContractReviewPanel from '@/app/components/contracts/ContractReviewPanel';
+import ContractIssueForm from '@/app/components/contracts/ContractIssueForm';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, useConfirmDialog } from '@/app/components/ui';
 import { ApiError, getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import {
   cancelContract,
   completeContract,
+  createContractIssue,
   getCompanyContractsPage,
   startContract,
   type Contract,
@@ -26,6 +29,7 @@ import {
 } from '@/app/api/pages/company/contracts';
 import { startConversation } from '@/app/api/pages/company/contracts';
 import { useAuth } from '@/app/providers/AuthProvider';
+import { formatUsd } from '@/app/utils/money';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 
 function contractTitle(contract: Contract, isEnglish: boolean) {
@@ -103,10 +107,7 @@ function formatAmount(value: number | string | null | undefined, isEnglish: bool
     return isEnglish ? 'Amount not set' : 'لم يتم تحديد قيمة العقد';
   }
 
-  const amount = Number(value);
-  return Number.isFinite(amount)
-    ? new Intl.NumberFormat(isEnglish ? 'en' : 'ar', { maximumFractionDigits: 2 }).format(amount)
-    : String(value);
+  return formatUsd(value, isEnglish ? 'en' : 'ar');
 }
 
 function getContractsErrorMessage(error: unknown, isEnglish: boolean) {
@@ -159,6 +160,7 @@ export default function CompanyContracts() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [needsWalletTopUp, setNeedsWalletTopUp] = useState(false);
+  const [issueContractId, setIssueContractId] = useState<number | null>(null);
   const { confirm, ConfirmDialog } = useConfirmDialog({
     title: isEnglish ? 'Confirm action' : 'تأكيد العملية',
     confirmLabel: isEnglish ? 'Confirm' : 'تأكيد',
@@ -366,7 +368,8 @@ export default function CompanyContracts() {
               const isBusy = busyId === contract.id;
               const canStart = isClient && contract.status === 'pending';
               const canComplete = isClient && ['funded', 'in_progress'].includes(contract.status);
-              const canCancel = !['completed', 'canceled', 'refunded'].includes(contract.status);
+              const canCancel = !['completed', 'canceled', 'refunded', 'dispute'].includes(contract.status);
+              const canOpenIssue = ['funded', 'in_progress'].includes(contract.status);
 
               return (
                 <Card key={contract.id}>
@@ -448,7 +451,38 @@ export default function CompanyContracts() {
                           {isEnglish ? 'Cancel contract' : 'إلغاء العقد'}
                         </Button>
                       ) : null}
+
+                      <Button
+                        variant="outline"
+                        className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                        disabled={isBusy || !canOpenIssue}
+                        title={!canOpenIssue ? (isEnglish ? 'Available after funding and starting the contract' : 'يتاح بعد تمويل العقد وبدء تنفيذه') : undefined}
+                        onClick={() => setIssueContractId(contract.id)}
+                      >
+                        <ShieldAlert className="me-2 size-4" />
+                        {isEnglish ? 'Open complaint or dispute' : 'فتح نزاع أو شكوى'}
+                      </Button>
                     </div>
+                    {issueContractId === contract.id ? (
+                      <ContractIssueForm
+                        contractId={contract.id}
+                        otherPartyName={otherParty?.name || (isEnglish ? 'Other party' : 'الطرف الثاني')}
+                        isEnglish={isEnglish}
+                        submitting={isBusy}
+                        onCancel={() => setIssueContractId(null)}
+                        onSubmit={async (payload) => {
+                          setBusyId(contract.id);
+                          try {
+                            await createContractIssue(contract.id, payload);
+                            setIssueContractId(null);
+                            setSuccess(isEnglish ? 'Request sent to the admin.' : 'تم إرسال الطلب إلى الأدمن.');
+                            await load();
+                          } finally {
+                            setBusyId(null);
+                          }
+                        }}
+                      />
+                    ) : null}
                     <ContractReviewPanel
                       contract={contract}
                       currentUserId={user?.id}

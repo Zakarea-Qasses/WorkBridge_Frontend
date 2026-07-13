@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { Briefcase, Clock, LoaderCircle, RefreshCw, Search, Sparkles, Tag, Wallet } from 'lucide-react';
+import { Briefcase, Clock, LoaderCircle, PauseCircle, PlayCircle, RefreshCw, Search, Sparkles, Tag, Trash2, Wallet } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
+import { useAuth } from '@/app/providers/AuthProvider';
 import {
   Badge,
   Button,
@@ -17,21 +18,19 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  useConfirmDialog,
 } from '@/app/components/ui';
 import { getApiErrorMessage } from '@/app/api/client';
 import { getCategories, type Category } from '@/app/api/pages/user/projects';
-import { getProjects, type UserProject } from '@/app/api/pages/user/projects';
+import { deleteProject, getMyProjects, getProjects, updateProjectStatus, type UserProject } from '@/app/api/pages/user/projects';
 import { createReport } from '@/app/api/pages/user/projects';
 import { categoryDisplayName } from '@/app/utils/categoryLabels';
+import { formatUsd } from '@/app/utils/money';
 
 type StatusMessage = { type: 'success' | 'error'; message: string } | null;
 
 function formatBudget(value: number | string, isEnglish: boolean) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return isEnglish ? 'Budget unavailable' : 'الميزانية غير متاحة';
-  return new Intl.NumberFormat(isEnglish ? 'en' : 'ar', {
-    maximumFractionDigits: 0,
-  }).format(amount);
+  return formatUsd(value, isEnglish ? 'en' : 'ar');
 }
 
 function formatDate(value: string, isEnglish: boolean) {
@@ -58,7 +57,9 @@ function budgetRange(value: string) {
 
 export default function Projects() {
   const { isEnglish, language } = useLanguage();
+  const { user } = useAuth();
   const requestIdRef = useRef(0);
+  const [view, setView] = useState<'browse' | 'mine'>('browse');
   const [projects, setProjects] = useState<UserProject[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -68,7 +69,13 @@ export default function Projects() {
   const [lastPage, setLastPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [reportingId, setReportingId] = useState<number | null>(null);
+  const [managingId, setManagingId] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState<StatusMessage>(null);
+  const { confirm, ConfirmDialog } = useConfirmDialog({
+    title: isEnglish ? 'Confirm action' : 'تأكيد العملية',
+    confirmLabel: isEnglish ? 'Confirm' : 'تأكيد',
+    cancelLabel: isEnglish ? 'Cancel' : 'إلغاء',
+  });
 
   useEffect(() => {
     getCategories().then(setCategories).catch(() => setCategories([]));
@@ -82,14 +89,30 @@ export default function Projects() {
 
     try {
       const budgetParams = budgetRange(selectedBudget);
-      const response = await getProjects({
-        page: currentPage,
-        search: searchTerm.trim() || undefined,
-        category_id: selectedCategory !== 'all' ? Number(selectedCategory) : undefined,
-        ...budgetParams,
-      });
+      const response = view === 'mine'
+        ? await getMyProjects(currentPage)
+        : await getProjects({
+            page: currentPage,
+            search: searchTerm.trim() || undefined,
+            category_id: selectedCategory !== 'all' ? Number(selectedCategory) : undefined,
+            ...budgetParams,
+          });
       if (requestId !== requestIdRef.current) return;
-      setProjects(response.data);
+      const normalizedSearch = searchTerm.trim().toLowerCase();
+      const filteredProjects = view === 'mine'
+        ? response.data.filter((project) => {
+            const matchesSearch = !normalizedSearch || `${project.title} ${project.description}`.toLowerCase().includes(normalizedSearch);
+            const matchesCategory = selectedCategory === 'all' || project.category_id === Number(selectedCategory);
+            const budget = Number(project.budget);
+            const matchesBudget =
+              selectedBudget === 'all' ||
+              (selectedBudget === 'low' && budget <= 5000) ||
+              (selectedBudget === 'medium' && budget >= 5000 && budget <= 15000) ||
+              (selectedBudget === 'high' && budget >= 15000);
+            return matchesSearch && matchesCategory && matchesBudget;
+          })
+        : response.data;
+      setProjects(filteredProjects);
       setLastPage(response.last_page || 1);
     } catch (error) {
       if (requestId !== requestIdRef.current) return;
@@ -101,7 +124,7 @@ export default function Projects() {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [currentPage, isEnglish, searchTerm, selectedBudget, selectedCategory]);
+  }, [currentPage, isEnglish, searchTerm, selectedBudget, selectedCategory, view]);
 
   useEffect(() => {
     void loadProjects();
@@ -109,9 +132,11 @@ export default function Projects() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedCategory, selectedBudget]);
+  }, [searchTerm, selectedCategory, selectedBudget, view]);
 
   const reportProject = async (project: UserProject) => {
+    if (!user || project.user_id === user.id) return;
+
     try {
       setReportingId(project.id);
       setStatusMessage(null);
@@ -137,6 +162,47 @@ export default function Projects() {
     }
   };
 
+  const toggleProjectStatus = async (project: UserProject) => {
+    const nextStatus = project.status === 'active' ? 'paused' : 'active';
+    try {
+      setManagingId(project.id);
+      setStatusMessage(null);
+      await updateProjectStatus(project.id, nextStatus);
+      setStatusMessage({
+        type: 'success',
+        message: nextStatus === 'paused'
+          ? (isEnglish ? 'Project paused successfully.' : 'تم إيقاف المشروع مؤقتاً')
+          : (isEnglish ? 'Project activated successfully.' : 'تم تفعيل المشروع بنجاح'),
+      });
+      await loadProjects();
+    } catch (error) {
+      setStatusMessage({ type: 'error', message: getApiErrorMessage(error) });
+    } finally {
+      setManagingId(null);
+    }
+  };
+
+  const removeProject = async (project: UserProject) => {
+    const confirmed = await confirm({
+      title: isEnglish ? 'Delete project' : 'حذف المشروع',
+      description: isEnglish ? 'Are you sure you want to delete this project?' : 'هل أنت متأكد من حذف هذا المشروع؟',
+      confirmLabel: isEnglish ? 'Delete' : 'حذف',
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    try {
+      setManagingId(project.id);
+      await deleteProject(project.id);
+      setProjects((current) => current.filter((item) => item.id !== project.id));
+      setStatusMessage({ type: 'success', message: isEnglish ? 'Project deleted successfully.' : 'تم حذف المشروع بنجاح' });
+    } catch (error) {
+      setStatusMessage({ type: 'error', message: getApiErrorMessage(error) });
+    } finally {
+      setManagingId(null);
+    }
+  };
+
   const projectCount = useMemo(() => projects.length, [projects]);
 
   return (
@@ -157,9 +223,17 @@ export default function Projects() {
               </p>
             </div>
 
-            <Button asChild className="min-w-36">
-              <Link to="/projects/create">{isEnglish ? 'Post a new project' : 'نشر مشروع جديد'}</Link>
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant={view === 'browse' ? 'default' : 'outline'} onClick={() => setView('browse')}>
+                {isEnglish ? 'Browse projects' : 'تصفح المشاريع'}
+              </Button>
+              <Button variant={view === 'mine' ? 'default' : 'outline'} onClick={() => setView('mine')}>
+                {isEnglish ? 'My projects' : 'مشاريعي'}
+              </Button>
+              <Button asChild className="min-w-36">
+                <Link to="/projects/create">{isEnglish ? 'Post a new project' : 'نشر مشروع جديد'}</Link>
+              </Button>
+            </div>
           </div>
         </section>
 
@@ -295,14 +369,33 @@ export default function Projects() {
                     </div>
 
                     <div className="flex flex-wrap gap-3">
-                      <Button
-                        variant="outline"
-                        disabled={reportingId === project.id}
-                        onClick={() => void reportProject(project)}
-                      >
-                        {reportingId === project.id ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
-                        {isEnglish ? 'Report post' : 'إبلاغ عن المنشور'}
-                      </Button>
+                      {project.user_id === user?.id ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            disabled={managingId === project.id}
+                            onClick={() => void toggleProjectStatus(project)}
+                          >
+                            {managingId === project.id ? <LoaderCircle className="me-2 size-4 animate-spin" /> : project.status === 'active' ? <PauseCircle className="me-2 size-4" /> : <PlayCircle className="me-2 size-4" />}
+                            {project.status === 'active'
+                              ? (isEnglish ? 'Pause' : 'إيقاف')
+                              : (isEnglish ? 'Activate' : 'تفعيل')}
+                          </Button>
+                          <Button variant="destructive" disabled={managingId === project.id} onClick={() => void removeProject(project)}>
+                            <Trash2 className="me-2 size-4" />
+                            {isEnglish ? 'Delete' : 'حذف'}
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          disabled={reportingId === project.id}
+                          onClick={() => void reportProject(project)}
+                        >
+                          {reportingId === project.id ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
+                          {isEnglish ? 'Report post' : 'إبلاغ عن المنشور'}
+                        </Button>
+                      )}
                       <Button asChild>
                         <Link to={`/projects/${project.id}`}>{isEnglish ? 'View details' : 'عرض التفاصيل'}</Link>
                       </Button>
@@ -314,7 +407,7 @@ export default function Projects() {
           ) : (
             <Card>
               <CardContent className="py-10 text-center">
-                <p className="text-lg font-medium">{isEnglish ? 'No projects currently available' : 'لا توجد مشاريع متاحة حالياً'}</p>
+                <p className="text-lg font-medium">{view === 'mine' ? (isEnglish ? 'You have no projects yet' : 'لا توجد لديك مشاريع حتى الآن') : (isEnglish ? 'No projects currently available' : 'لا توجد مشاريع متاحة حالياً')}</p>
                 <p className="mt-2 text-muted-foreground">
                   {isEnglish ? 'Try changing the filters or publish a new project.' : 'جرّب تعديل الفلاتر أو انشر مشروعاً جديداً.'}
                 </p>
@@ -353,6 +446,7 @@ export default function Projects() {
             </Button>
           </div>
         ) : null}
+        <ConfirmDialog />
       </div>
     </DashboardLayout>
   );

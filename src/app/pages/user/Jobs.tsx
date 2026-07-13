@@ -26,6 +26,7 @@ import {
   type JobPost,
 } from '@/app/api/pages/user/jobs';
 import { createReport } from '@/app/api/pages/user/jobs';
+import { formatUsd } from '@/app/utils/money';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 
 const JOBS_PER_PAGE = 6;
@@ -219,7 +220,7 @@ export default function Jobs() {
                       </span>
                       {job.salary != null ? (
                         <Badge variant="secondary">
-                          {isEnglish ? 'Salary' : 'الراتب'}: {job.salary}
+                          {isEnglish ? 'Salary' : 'الراتب'}: {formatUsd(job.salary, isEnglish ? 'en' : 'ar')}
                         </Badge>
                       ) : null}
                     </div>

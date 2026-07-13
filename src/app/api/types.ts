@@ -197,6 +197,8 @@ export interface Service {
   status?: 'active' | 'paused' | 'closed' | string;
   created_at: string;
   updated_at: string;
+  rating_avg?: number | string | null;
+  orders_count?: number;
   user?: ServiceOwner;
   category?: ServiceCategory;
 }

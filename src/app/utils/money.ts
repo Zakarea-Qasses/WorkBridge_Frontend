@@ -10,6 +10,15 @@ export function sanitizeMoneyInput(value: string) {
   return whole;
 }
 
+export function sanitizePositiveMoneyInput(value: string) {
+  const sanitized = sanitizeMoneyInput(value);
+  return sanitized && Number(sanitized) === 0 ? '' : sanitized;
+}
+
+export function sanitizePositiveIntegerInput(value: string) {
+  return value.replace(/\D/g, '').replace(/^0+/, '');
+}
+
 export function parsePositiveMoney(value: string) {
   const amount = Number(value);
   return Number.isFinite(amount) && amount > 0 ? amount : null;

@@ -26,11 +26,20 @@ import {
   ReportDecisionPayload,
   updateReportDecision,
 } from '@/app/api/pages/admin/reports';
+import { formatUsd } from '@/app/utils/money';
 
 type StatusMessage = { type: 'success' | 'error'; message: string } | null;
 type ReportStatusFilter = 'all' | 'pending' | 'accepted' | 'rejected';
-type ReportCategoryFilter = 'all' | 'support' | 'complaint' | 'dispute' | 'payment' | 'technical';
+type ReportCategoryFilter = 'all' | 'support' | 'complaint' | 'technical';
 type AdminAction = NonNullable<ReportDecisionPayload['admin_action']> | 'none';
+
+function isContractCase(report: Report) {
+  return Boolean(
+    report.contract_id ||
+      report.target_type === 'contract' ||
+      ['dispute', 'payment'].includes(report.category),
+  );
+}
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
 const BACKEND_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
@@ -146,14 +155,7 @@ function formatAmount(value: number | string | null | undefined, isEnglish: bool
     return isEnglish ? 'Not available' : 'غير متوفر';
   }
 
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) {
-    return String(value);
-  }
-
-  return new Intl.NumberFormat(isEnglish ? 'en' : 'ar', {
-    maximumFractionDigits: 2,
-  }).format(amount);
+  return formatUsd(value, isEnglish ? 'en' : 'ar');
 }
 
 function StatusBox({ status }: { status: StatusMessage }) {
@@ -193,7 +195,7 @@ export default function AdminReports() {
     setLoading(true);
     setStatus(null);
     try {
-      setReports(await getAllReports());
+      setReports((await getAllReports()).filter((report) => !isContractCase(report)));
     } catch (error) {
       setReports([]);
       setStatus({
@@ -286,8 +288,8 @@ export default function AdminReports() {
             </h1>
             <p className="mt-1 text-muted-foreground">
               {isEnglish
-                ? 'Review user reports, save admin decisions, and handle contract disputes.'
-                : 'مراجعة بلاغات المستخدمين وحفظ قرار الأدمن ومعالجة النزاعات المرتبطة بالعقود.'}
+                ? 'Review support requests, technical issues, and content reports.'
+                : 'مراجعة طلبات الدعم والمشاكل التقنية وبلاغات المحتوى.'}
             </p>
           </div>
           <Button variant="outline" disabled={loading} onClick={() => void loadReports()}>
@@ -358,8 +360,6 @@ export default function AdminReports() {
                   <SelectItem value="all">{isEnglish ? 'All categories' : 'كل الأنواع'}</SelectItem>
                   <SelectItem value="support">{categoryLabel('support', isEnglish)}</SelectItem>
                   <SelectItem value="complaint">{categoryLabel('complaint', isEnglish)}</SelectItem>
-                  <SelectItem value="dispute">{categoryLabel('dispute', isEnglish)}</SelectItem>
-                  <SelectItem value="payment">{categoryLabel('payment', isEnglish)}</SelectItem>
                   <SelectItem value="technical">{categoryLabel('technical', isEnglish)}</SelectItem>
                 </SelectContent>
               </Select>

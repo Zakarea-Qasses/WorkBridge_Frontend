@@ -1,6 +1,6 @@
 import { apiRequest } from '@/app/api/client';
 
-import type { PaginatedResponse, Conversation, Contract, Report } from '../../types';
+import type { PaginatedResponse, Conversation, Contract, Report, ReportCategory } from '../../types';
 
 export type { Contract } from '../../types';
 
@@ -34,17 +34,21 @@ export function startContract(id: number) {
   return apiRequest(`/contracts/${id}/start`, { method: 'POST' });
 }
 
-export async function createContractDispute(
+export async function createContractIssue(
   contractId: number,
-  payload: { description: string; attachments: File[] },
+  payload: {
+    category: Extract<ReportCategory, 'complaint' | 'dispute' | 'payment'>;
+    description: string;
+    attachments: File[];
+  },
 ) {
   const formData = new FormData();
   formData.append('target_type', 'contract');
   formData.append('target_id', String(contractId));
   formData.append('contract_id', String(contractId));
-  formData.append('category', 'dispute');
+  formData.append('category', payload.category);
   formData.append('priority', 'high');
-  formData.append('title', `Contract #${contractId} dispute`);
+  formData.append('title', `Contract #${contractId} ${payload.category}`);
   formData.append('description', payload.description);
   payload.attachments.forEach((file) => formData.append('attachments[]', file));
 

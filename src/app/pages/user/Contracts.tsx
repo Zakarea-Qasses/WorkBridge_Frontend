@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { LoaderCircle, MessageSquare, Paperclip, RefreshCw, ShieldAlert, X } from 'lucide-react';
+import { LoaderCircle, MessageSquare, RefreshCw, ShieldAlert } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import ContractReviewPanel from '@/app/components/contracts/ContractReviewPanel';
+import ContractIssueForm from '@/app/components/contracts/ContractIssueForm';
 import {
   Badge,
   Button,
@@ -10,15 +11,12 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  Input,
-  Label,
-  Textarea,
 } from '@/app/components/ui';
 import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import {
   cancelContract,
   completeContract,
-  createContractDispute,
+  createContractIssue,
   getCompanyContracts,
   getContracts,
   startContract,
@@ -26,6 +24,7 @@ import {
 } from '@/app/api/pages/user/contracts';
 import { startConversation } from '@/app/api/pages/user/contracts';
 import { useAuth } from '@/app/providers/AuthProvider';
+import { formatUsd } from '@/app/utils/money';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 
 function contractTitle(contract: Contract, isEnglish: boolean) {
@@ -55,10 +54,7 @@ export function ContractsPage({ userType = 'user' }: { userType?: 'user' | 'comp
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [needsWalletTopUp, setNeedsWalletTopUp] = useState(false);
-  const [disputeContractId, setDisputeContractId] = useState<number | null>(null);
-  const [disputeReason, setDisputeReason] = useState('');
-  const [disputeAttachments, setDisputeAttachments] = useState<File[]>([]);
-  const [disputeErrors, setDisputeErrors] = useState<Record<string, string[]>>({});
+  const [issueContractId, setIssueContractId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -125,40 +121,6 @@ export function ContractsPage({ userType = 'user' }: { userType?: 'user' | 'comp
     );
   };
 
-  const closeDisputeForm = () => {
-    setDisputeContractId(null);
-    setDisputeReason('');
-    setDisputeAttachments([]);
-    setDisputeErrors({});
-  };
-
-  const submitDispute = async (contract: Contract) => {
-    const reason = disputeReason.trim();
-    if (!reason) {
-      setDisputeErrors({
-        description: [isEnglish ? 'Please explain the dispute reason.' : 'يرجى توضيح سبب النزاع.'],
-      });
-      return;
-    }
-
-    try {
-      setBusyId(contract.id);
-      setError('');
-      setDisputeErrors({});
-      await createContractDispute(contract.id, {
-        description: reason,
-        attachments: disputeAttachments,
-      });
-      closeDisputeForm();
-      await load();
-    } catch (submitError) {
-      setDisputeErrors(getValidationErrors(submitError));
-      setError(getApiErrorMessage(submitError));
-    } finally {
-      setBusyId(null);
-    }
-  };
-
   return (
     <DashboardLayout userType={userType === 'company' ? 'company' : 'user'}>
       <div className="space-y-6" dir={language === 'en' ? 'ltr' : 'rtl'}>
@@ -189,11 +151,12 @@ export function ContractsPage({ userType = 'user' }: { userType?: 'user' | 'comp
             {contracts.map((contract) => {
               const isClient = contract.client_id === user?.id;
               const other = isClient ? contract.freelancer : contract.client;
+              const canOpenIssue = ['funded', 'in_progress'].includes(contract.status);
               return (
                 <Card key={contract.id}>
                   <CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle>{contractTitle(contract, isEnglish)}</CardTitle><p className="mt-1 text-sm text-muted-foreground">{isEnglish ? 'With' : 'مع'} {other.name}</p></div><Badge variant="outline">{statusLabel(contract.status, isEnglish)}</Badge></div></CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid gap-2 text-sm sm:grid-cols-2"><p>{isEnglish ? 'Amount:' : 'المبلغ:'} {contract.amount}</p><p>{isEnglish ? 'Provider net:' : 'صافي مقدم الخدمة:'} {contract.freelancer_amount}</p></div>
+                    <div className="grid gap-2 text-sm sm:grid-cols-2"><p>{isEnglish ? 'Amount:' : 'المبلغ:'} {formatUsd(contract.amount, isEnglish ? 'en' : 'ar')}</p><p>{isEnglish ? 'Provider net:' : 'صافي مقدم الخدمة:'} {formatUsd(contract.freelancer_amount, isEnglish ? 'en' : 'ar')}</p></div>
                     <div className="flex flex-wrap gap-2">
                       <Button variant="outline" disabled={busyId === contract.id} onClick={() => messageOtherParty(contract)}><MessageSquare className="me-2 size-4" />{isEnglish ? 'Message other party' : 'مراسلة الطرف الآخر'}</Button>
                       {isClient && contract.status === 'pending' ? (
@@ -209,127 +172,35 @@ export function ContractsPage({ userType = 'user' }: { userType?: 'user' | 'comp
                       ) : null}
                       {isClient && ['funded', 'in_progress'].includes(contract.status) ? <Button disabled={busyId === contract.id} onClick={() => runAction(contract, 'complete')}>{isEnglish ? 'Confirm completion' : 'تأكيد الإكمال'}</Button> : null}
                       {!['completed', 'canceled', 'refunded', 'dispute'].includes(contract.status) ? <Button variant="destructive" disabled={busyId === contract.id} onClick={() => runAction(contract, 'cancel')}>{isEnglish ? 'Cancel' : 'إلغاء'}</Button> : null}
-                      {['funded', 'in_progress'].includes(contract.status) ? (
-                        <Button
-                          variant="outline"
-                          className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
-                          disabled={busyId === contract.id}
-                          onClick={() => {
-                            setDisputeContractId(contract.id);
-                            setDisputeReason('');
-                            setDisputeAttachments([]);
-                            setDisputeErrors({});
-                          }}
-                        >
-                          <ShieldAlert className="me-2 size-4" />
-                          {isEnglish ? 'Open dispute' : 'فتح نزاع'}
-                        </Button>
-                      ) : null}
+                      <Button
+                        variant="outline"
+                        className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                        disabled={busyId === contract.id || !canOpenIssue}
+                        title={!canOpenIssue ? (isEnglish ? 'Available after funding and starting the contract' : 'يتاح بعد تمويل العقد وبدء تنفيذه') : undefined}
+                        onClick={() => setIssueContractId(contract.id)}
+                      >
+                        <ShieldAlert className="me-2 size-4" />
+                        {isEnglish ? 'Open complaint or dispute' : 'فتح نزاع أو شكوى'}
+                      </Button>
                     </div>
-                    {disputeContractId === contract.id ? (
-                      <div className="space-y-4 rounded-md border border-amber-200 bg-amber-50/40 p-4">
-                        <div>
-                          <h3 className="font-semibold text-amber-900">
-                            {isEnglish ? 'Open a contract dispute' : 'فتح نزاع على العقد'}
-                          </h3>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {isEnglish
-                              ? `Contract #${contract.id} with ${other.name}. The request and evidence will be sent to the admin.`
-                              : `العقد رقم ${contract.id} مع ${other.name}. سيتم إرسال السبب والأدلة إلى الأدمن.`}
-                          </p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor={`dispute-reason-${contract.id}`}>
-                            {isEnglish ? 'Dispute reason' : 'سبب النزاع'}
-                          </Label>
-                          <Textarea
-                            id={`dispute-reason-${contract.id}`}
-                            rows={5}
-                            value={disputeReason}
-                            onChange={(event) => {
-                              setDisputeReason(event.target.value);
-                              setDisputeErrors((current) => ({ ...current, description: [] }));
-                            }}
-                          />
-                          {disputeErrors.description?.[0] ? (
-                            <p className="text-xs text-destructive">{disputeErrors.description[0]}</p>
-                          ) : null}
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor={`dispute-files-${contract.id}`}>
-                            {isEnglish ? 'Evidence attachments' : 'صور ومستندات الأدلة'}
-                          </Label>
-                          <Input
-                            id={`dispute-files-${contract.id}`}
-                            type="file"
-                            multiple
-                            accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt"
-                            onChange={(event) => {
-                              setDisputeAttachments((current) => [
-                                ...current,
-                                ...Array.from(event.target.files || []),
-                              ]);
-                              event.target.value = '';
-                            }}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            {isEnglish
-                              ? 'Optional: upload images or documents that support your claim, up to 10 MB each.'
-                              : 'اختياري: ارفع صوراً أو مستندات تدعم سبب النزاع، بحد أقصى 10 ميغابايت للملف.'}
-                          </p>
-                          {disputeAttachments.length ? (
-                            <div className="space-y-2">
-                              {disputeAttachments.map((file, index) => (
-                                <div
-                                  key={`${file.name}-${file.lastModified}-${index}`}
-                                  className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 text-sm"
-                                >
-                                  <span className="flex min-w-0 items-center gap-2">
-                                    <Paperclip className="size-4 shrink-0" />
-                                    <span className="truncate">{file.name}</span>
-                                  </span>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      setDisputeAttachments((current) =>
-                                        current.filter((_, itemIndex) => itemIndex !== index),
-                                      )
-                                    }
-                                  >
-                                    <X className="size-4" />
-                                    <span className="sr-only">{isEnglish ? 'Remove' : 'إزالة'}</span>
-                                  </Button>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                          {disputeErrors.attachments?.[0] ? (
-                            <p className="text-xs text-destructive">{disputeErrors.attachments[0]}</p>
-                          ) : null}
-                        </div>
-
-                        <div className="flex flex-wrap justify-end gap-2">
-                          <Button type="button" variant="outline" onClick={closeDisputeForm}>
-                            {isEnglish ? 'Cancel' : 'إلغاء'}
-                          </Button>
-                          <Button
-                            type="button"
-                            disabled={busyId === contract.id}
-                            onClick={() => void submitDispute(contract)}
-                          >
-                            {busyId === contract.id ? (
-                              <LoaderCircle className="me-2 size-4 animate-spin" />
-                            ) : (
-                              <ShieldAlert className="me-2 size-4" />
-                            )}
-                            {isEnglish ? 'Submit dispute' : 'إرسال النزاع'}
-                          </Button>
-                        </div>
-                      </div>
+                    {issueContractId === contract.id ? (
+                      <ContractIssueForm
+                        contractId={contract.id}
+                        otherPartyName={other.name}
+                        isEnglish={isEnglish}
+                        submitting={busyId === contract.id}
+                        onCancel={() => setIssueContractId(null)}
+                        onSubmit={async (payload) => {
+                          setBusyId(contract.id);
+                          try {
+                            await createContractIssue(contract.id, payload);
+                            setIssueContractId(null);
+                            await load();
+                          } finally {
+                            setBusyId(null);
+                          }
+                        }}
+                      />
                     ) : null}
                     <ContractReviewPanel
                       contract={contract}

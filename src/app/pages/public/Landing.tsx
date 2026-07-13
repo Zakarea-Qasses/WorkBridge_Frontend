@@ -1,7 +1,11 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
+import { getLandingData } from '@/app/api/pages/public/landing';
+import type { JobPost, Service, UserProject } from '@/app/api/types';
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui';
 import { FreshAuthLink, LanguageToggle } from '@/app/components/shared';
 import { useLanguage } from '@/app/providers/LanguageProvider';
+import { formatUsd } from '@/app/utils/money';
 import {
   Briefcase,
   Users,
@@ -72,13 +76,18 @@ const content = {
     ],
     featuredJobsTitle: 'وظائف مميزة',
     freelanceProjectsTitle: 'مشاريع العمل الحر',
-    topFreelancersTitle: 'أفضل المستقلين',
-    topFreelancersDescription: 'محترفون موثوقون بتقييمات عالية',
+    topFreelancersTitle: 'مقدمو الخدمات',
+    topFreelancersDescription: 'مقدمو خدمات مسجلون على المنصة',
     viewAll: 'عرض الكل',
-    verified: 'موثق',
     duration: 'المدة',
-    proposals: 'عرض',
-    projectsCount: 'مشروع',
+    projectsCount: 'خدمة',
+    loading: 'جاري تحميل أحدث البيانات...',
+    emptyJobs: 'لا توجد وظائف متاحة حالياً.',
+    emptyProjects: 'لا توجد مشاريع متاحة حالياً.',
+    emptyProviders: 'لا يوجد مقدمو خدمات حالياً.',
+    loadError: 'تعذر تحميل بيانات الصفحة الرئيسية من الخادم.',
+    days: 'يوم',
+    salaryUnavailable: 'الراتب غير محدد',
     ctaTitle: 'ابدأ رحلتك المهنية الآن',
     ctaDescription: 'انضم إلى آلاف المحترفين والشركات على منصة Work Bridge',
     freeAccount: 'إنشاء حساب مجاني',
@@ -90,22 +99,6 @@ const content = {
     support: 'الدعم',
     contact: 'تواصل معنا',
     rights: 'جميع الحقوق محفوظة لدى Work Bridge',
-    jobsData: [
-      { title: 'مطور Full Stack', company: 'شركة التقنية المتقدمة', salary: '$8,000 - $12,000', verified: true },
-      { title: 'مصمم UI/UX', company: 'وكالة الإبداع الرقمي', salary: '$6,000 - $9,000', verified: true },
-      { title: 'مدير مشاريع', company: 'مؤسسة النجاح', salary: '$10,000 - $15,000', verified: false },
-    ],
-    projectsData: [
-      { title: 'تطوير تطبيق موبايل', budget: '$15,000', proposals: 12, duration: '3 أشهر' },
-      { title: 'تصميم هوية بصرية', budget: '$5,000', proposals: 8, duration: 'شهر واحد' },
-      { title: 'كتابة محتوى تسويقي', budget: '$3,000', proposals: 15, duration: 'أسبوعين' },
-    ],
-    freelancersData: [
-      { id: '1', name: 'أحمد محمد', skill: 'مطور واجهات أمامية', rating: 4.9, projects: 45 },
-      { id: '2', name: 'فاطمة علي', skill: 'مصممة جرافيك', rating: 5.0, projects: 62 },
-      { id: '3', name: 'خالد سعيد', skill: 'مطور تطبيقات', rating: 4.8, projects: 38 },
-      { id: '4', name: 'نورة حسن', skill: 'كاتبة محتوى', rating: 4.9, projects: 71 },
-    ],
     city: 'دمشق، سوريا',
   },
   en: {
@@ -163,13 +156,18 @@ const content = {
     ],
     featuredJobsTitle: 'Featured Jobs',
     freelanceProjectsTitle: 'Freelance Projects',
-    topFreelancersTitle: 'Top Freelancers',
-    topFreelancersDescription: 'Trusted professionals with strong ratings',
+    topFreelancersTitle: 'Service Providers',
+    topFreelancersDescription: 'Service providers registered on the platform',
     viewAll: 'View All',
-    verified: 'Verified',
     duration: 'Duration',
-    proposals: 'Proposals',
-    projectsCount: 'projects',
+    projectsCount: 'services',
+    loading: 'Loading the latest data...',
+    emptyJobs: 'No jobs are currently available.',
+    emptyProjects: 'No projects are currently available.',
+    emptyProviders: 'No service providers are currently available.',
+    loadError: 'Unable to load homepage data from the server.',
+    days: 'days',
+    salaryUnavailable: 'Salary not specified',
     ctaTitle: 'Start your professional journey today',
     ctaDescription: 'Join thousands of professionals and companies on Work Bridge',
     freeAccount: 'Create Free Account',
@@ -181,22 +179,6 @@ const content = {
     support: 'Support',
     contact: 'Contact Us',
     rights: 'All rights reserved to Work Bridge',
-    jobsData: [
-      { title: 'Full Stack Developer', company: 'Advanced Tech Company', salary: '$8,000 - $12,000', verified: true },
-      { title: 'UI/UX Designer', company: 'Digital Creative Agency', salary: '$6,000 - $9,000', verified: true },
-      { title: 'Project Manager', company: 'Success Foundation', salary: '$10,000 - $15,000', verified: false },
-    ],
-    projectsData: [
-      { title: 'Mobile App Development', budget: '$15,000', proposals: 12, duration: '3 months' },
-      { title: 'Brand Identity Design', budget: '$5,000', proposals: 8, duration: '1 month' },
-      { title: 'Marketing Content Writing', budget: '$3,000', proposals: 15, duration: '2 weeks' },
-    ],
-    freelancersData: [
-      { id: '1', name: 'Ahmad Mohammad', skill: 'Frontend Developer', rating: 4.9, projects: 45 },
-      { id: '2', name: 'Fatima Ali', skill: 'Graphic Designer', rating: 5.0, projects: 62 },
-      { id: '3', name: 'Khaled سعيد', skill: 'App Developer', rating: 4.8, projects: 38 },
-      { id: '4', name: 'Noura Hassan', skill: 'Content Writer', rating: 4.9, projects: 71 },
-    ],
     city: 'Damascus, Syria',
   },
 } satisfies Record<
@@ -227,10 +209,15 @@ const content = {
     topFreelancersTitle: string;
     topFreelancersDescription: string;
     viewAll: string;
-    verified: string;
     duration: string;
-    proposals: string;
     projectsCount: string;
+    loading: string;
+    emptyJobs: string;
+    emptyProjects: string;
+    emptyProviders: string;
+    loadError: string;
+    days: string;
+    salaryUnavailable: string;
     ctaTitle: string;
     ctaDescription: string;
     freeAccount: string;
@@ -242,21 +229,62 @@ const content = {
     support: string;
     contact: string;
     rights: string;
-    jobsData: Array<{ title: string; company: string; salary: string; verified: boolean }>;
-    projectsData: Array<{ title: string; budget: string; proposals: number; duration: string }>;
-    freelancersData: Array<{ id: string; name: string; skill: string; rating: number; projects: number }>;
     city: string;
   }
 >;
 
 export default function Landing() {
   const { language: currentLanguage } = useLanguage();
+  const [jobs, setJobs] = useState<JobPost[]>([]);
+  const [projects, setProjects] = useState<UserProject[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const helpPath = '/help';
   const termsPath = '/terms';
   const privacyPath = '/privacy';
 
   const t = content[currentLanguage];
+  const locale = currentLanguage === 'en' ? 'en' : 'ar';
+  const providers = useMemo(() => {
+    const providerMap = new Map<number, { id: number; name: string; specialty: string; services: number }>();
+
+    services.forEach((service) => {
+      if (!service.user?.id) return;
+      const current = providerMap.get(service.user.id);
+      providerMap.set(service.user.id, {
+        id: service.user.id,
+        name: service.user.name,
+        specialty: current?.specialty || service.category?.name || service.title,
+        services: (current?.services || 0) + 1,
+      });
+    });
+
+    return Array.from(providerMap.values()).slice(0, 4);
+  }, [services]);
+
+  useEffect(() => {
+    let active = true;
+
+    getLandingData()
+      .then((data) => {
+        if (!active) return;
+        setJobs(data.jobs.slice(0, 3));
+        setProjects(data.projects.slice(0, 3));
+        setServices(data.services);
+      })
+      .catch(() => {
+        if (active) setLoadFailed(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-white" dir="rtl">
@@ -396,21 +424,26 @@ export default function Landing() {
             </Button>
           </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {t.jobsData.map((job) => (
-              <FreshAuthLink key={job.title} mode="login" className="block">
+            {loading ? (
+              <Card className="md:col-span-2 lg:col-span-3"><CardContent className="py-10 text-center text-muted-foreground">{t.loading}</CardContent></Card>
+            ) : loadFailed ? (
+              <Card className="md:col-span-2 lg:col-span-3"><CardContent className="py-10 text-center text-destructive">{t.loadError}</CardContent></Card>
+            ) : jobs.length === 0 ? (
+              <Card className="md:col-span-2 lg:col-span-3"><CardContent className="py-10 text-center text-muted-foreground">{t.emptyJobs}</CardContent></Card>
+            ) : jobs.map((job) => (
+              <FreshAuthLink key={job.id} mode="login" className="block">
                 <Card className="cursor-pointer transition-shadow hover:shadow-lg">
                   <CardHeader>
-                    <div className="flex items-start justify-between gap-3">
-                      <CardTitle className="text-lg">{job.title}</CardTitle>
-                      {job.verified && <Badge className="bg-green-500">{t.verified}</Badge>}
-                    </div>
+                    <CardTitle className="text-lg">{job.title}</CardTitle>
                     <CardDescription className="flex items-center gap-2">
                       <Briefcase className="size-4" />
-                      {job.company}
+                      {job.company?.company_name || '-'}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <p className="font-semibold text-primary">{job.salary}</p>
+                    <p className="font-semibold text-primary">
+                      {job.salary === null ? t.salaryUnavailable : formatUsd(job.salary, locale)}
+                    </p>
                   </CardContent>
                 </Card>
               </FreshAuthLink>
@@ -428,21 +461,25 @@ export default function Landing() {
             </Button>
           </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {t.projectsData.map((project) => (
-              <FreshAuthLink key={project.title} mode="login" className="block">
+            {loading ? (
+              <Card className="md:col-span-2 lg:col-span-3"><CardContent className="py-10 text-center text-muted-foreground">{t.loading}</CardContent></Card>
+            ) : loadFailed ? (
+              <Card className="md:col-span-2 lg:col-span-3"><CardContent className="py-10 text-center text-destructive">{t.loadError}</CardContent></Card>
+            ) : projects.length === 0 ? (
+              <Card className="md:col-span-2 lg:col-span-3"><CardContent className="py-10 text-center text-muted-foreground">{t.emptyProjects}</CardContent></Card>
+            ) : projects.map((project) => (
+              <FreshAuthLink key={project.id} mode="login" className="block">
                 <Card className="cursor-pointer transition-shadow hover:shadow-lg">
                   <CardHeader>
                     <CardTitle className="text-lg">{project.title}</CardTitle>
                     <CardDescription>
-                      {t.duration}: {project.duration}
+                      {t.duration}: {project.duration_days} {t.days}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold text-primary">{project.budget}</p>
-                      <Badge variant="secondary">
-                        {project.proposals} {t.proposals}
-                      </Badge>
+                      <p className="font-semibold text-primary">{formatUsd(project.budget, locale)}</p>
+                      {project.category?.name && <Badge variant="secondary">{project.category.name}</Badge>}
                     </div>
                   </CardContent>
                 </Card>
@@ -459,29 +496,29 @@ export default function Landing() {
             <p className="mt-2 text-muted-foreground">{t.topFreelancersDescription}</p>
           </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {t.freelancersData.map((freelancer) => (
-              <FreshAuthLink key={freelancer.id} mode="login" className="block">
+            {loading ? (
+              <Card className="md:col-span-2 lg:col-span-4"><CardContent className="py-10 text-center text-muted-foreground">{t.loading}</CardContent></Card>
+            ) : loadFailed ? (
+              <Card className="md:col-span-2 lg:col-span-4"><CardContent className="py-10 text-center text-destructive">{t.loadError}</CardContent></Card>
+            ) : providers.length === 0 ? (
+              <Card className="md:col-span-2 lg:col-span-4"><CardContent className="py-10 text-center text-muted-foreground">{t.emptyProviders}</CardContent></Card>
+            ) : providers.map((provider) => (
+              <Link key={provider.id} to={`/freelancers/${provider.id}`} className="block">
                 <Card className="cursor-pointer text-center transition-shadow hover:shadow-lg">
                   <CardHeader>
                     <div className="mx-auto mb-4 flex size-20 items-center justify-center rounded-full bg-primary/10">
                       <Users className="size-10 text-primary" />
                     </div>
-                    <CardTitle className="text-lg">{freelancer.name}</CardTitle>
-                    <CardDescription>{freelancer.skill}</CardDescription>
+                    <CardTitle className="text-lg">{provider.name}</CardTitle>
+                    <CardDescription>{provider.specialty}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex items-center justify-center gap-4 text-sm">
-                      <div className="flex items-center gap-1">
-                        <Star className="size-4 fill-yellow-400 text-yellow-400" />
-                        <span>{freelancer.rating}</span>
-                      </div>
-                      <div className="text-muted-foreground">
-                        {freelancer.projects} {t.projectsCount}
-                      </div>
+                    <div className="text-sm text-muted-foreground">
+                      {provider.services} {t.projectsCount}
                     </div>
                   </CardContent>
                 </Card>
-              </FreshAuthLink>
+              </Link>
             ))}
           </div>
         </div>

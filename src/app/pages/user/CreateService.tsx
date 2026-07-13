@@ -23,6 +23,7 @@ import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import { getCategories, type Category } from '@/app/api/pages/user/createService';
 import { createService } from '@/app/api/pages/user/createService';
 import { categoryDisplayName } from '@/app/utils/categoryLabels';
+import { sanitizePositiveIntegerInput, sanitizePositiveMoneyInput } from '@/app/utils/money';
 
 export default function CreateService() {
   const navigate = useNavigate();
@@ -147,13 +148,14 @@ export default function CreateService() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="service-price">{isEnglish ? 'Price' : 'السعر'}</Label>
+                  <Label htmlFor="service-price">{isEnglish ? 'Price ($)' : 'السعر ($)'}</Label>
                   <Input
                     id="service-price"
-                    type="number"
-                    min="0"
+                    type="text"
+                    inputMode="decimal"
                     value={formData.price}
-                    onChange={(event) => setFormData((current) => ({ ...current, price: event.target.value }))}
+                    onChange={(event) => setFormData((current) => ({ ...current, price: sanitizePositiveMoneyInput(event.target.value) }))}
+                    placeholder="$0.00"
                   />
                   {fieldErrors.price?.[0] ? <p className="text-xs text-destructive">{fieldErrors.price[0]}</p> : null}
                 </div>
@@ -163,10 +165,10 @@ export default function CreateService() {
                 <Label htmlFor="service-delivery">{isEnglish ? 'Delivery Time in Days' : 'مدة التسليم بالأيام'}</Label>
                 <Input
                   id="service-delivery"
-                  type="number"
-                  min="1"
+                  type="text"
+                  inputMode="numeric"
                   value={formData.delivery_days}
-                  onChange={(event) => setFormData((current) => ({ ...current, delivery_days: event.target.value }))}
+                  onChange={(event) => setFormData((current) => ({ ...current, delivery_days: sanitizePositiveIntegerInput(event.target.value) }))}
                 />
                 {fieldErrors.delivery_days?.[0] ? <p className="text-xs text-destructive">{fieldErrors.delivery_days[0]}</p> : null}
               </div>

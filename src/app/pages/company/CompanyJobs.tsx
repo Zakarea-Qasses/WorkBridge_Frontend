@@ -26,6 +26,7 @@ import {
   updateJob,
 } from '@/app/api/pages/company/jobs';
 import { getCitiesByGovernorate, getGovernorates, LocationOption } from '@/app/api/pages/company/jobs';
+import { formatUsd, sanitizePositiveMoneyInput } from '@/app/utils/money';
 import { getDashboardPathForUser, useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { locationDisplayName } from '@/app/utils/locationLabels';
@@ -146,12 +147,7 @@ function formatSalary(value: JobPost['salary'], isEnglish: boolean) {
     return isEnglish ? 'Not provided' : 'غير محدد';
   }
 
-  const numberValue = Number(value);
-  if (!Number.isFinite(numberValue)) {
-    return String(value);
-  }
-
-  return `${numberValue.toLocaleString(isEnglish ? 'en-US' : 'ar-SY')} ${isEnglish ? 'SYP' : 'ل.س'}`;
+  return formatUsd(value, isEnglish ? 'en' : 'ar');
 }
 
 function formatDate(value: string | null | undefined, isEnglish: boolean) {
@@ -631,12 +627,13 @@ export default function CompanyJobs() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">{labels.salary}</label>
+                <label className="text-sm font-medium">{labels.salary} ($)</label>
                 <Input
-                  type="number"
-                  min="1"
+                  type="text"
+                  inputMode="decimal"
                   value={draft.salary}
-                  onChange={(event) => handleDraftChange('salary', event.target.value)}
+                  onChange={(event) => handleDraftChange('salary', sanitizePositiveMoneyInput(event.target.value))}
+                  placeholder="$0.00"
                 />
                 {renderFieldError('salary')}
               </div>

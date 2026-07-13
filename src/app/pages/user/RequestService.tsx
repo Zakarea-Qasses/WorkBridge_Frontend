@@ -13,6 +13,7 @@ import {
 } from '@/app/api/pages/user/requestService';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
+import { formatUsd, sanitizePositiveIntegerInput } from '@/app/utils/money';
 
 function serviceRequestStatusLabel(status: ServiceRequest['status'], isEnglish: boolean) {
   const labels: Record<ServiceRequest['status'], [string, string]> = {
@@ -152,12 +153,12 @@ export default function RequestService() {
                 <div className="space-y-2"><Label>{isEnglish ? 'Title' : 'عنوان الطلب'}</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />{errors.title?.[0] ? <p className="text-xs text-destructive">{errors.title[0]}</p> : null}</div>
                 <div className="space-y-2"><Label>{isEnglish ? 'Description' : 'تفاصيل الطلب'}</Label><Textarea rows={6} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />{errors.description?.[0] ? <p className="text-xs text-destructive">{errors.description[0]}</p> : null}</div>
                 <div className="space-y-2"><Label>{isEnglish ? 'References' : 'روابط أو مراجع'}</Label><Textarea rows={3} value={form.references} onChange={(e) => setForm({ ...form, references: e.target.value })} /></div>
-                <div className="space-y-2"><Label>{isEnglish ? 'Delivery days' : 'مدة التسليم المطلوبة بالأيام'}</Label><Input type="number" min="1" value={form.delivery_days} onChange={(e) => setForm({ ...form, delivery_days: e.target.value })} />{errors.delivery_days?.[0] ? <p className="text-xs text-destructive">{errors.delivery_days[0]}</p> : null}</div>
+                <div className="space-y-2"><Label>{isEnglish ? 'Delivery days' : 'مدة التسليم المطلوبة بالأيام'}</Label><Input type="text" inputMode="numeric" value={form.delivery_days} onChange={(e) => setForm({ ...form, delivery_days: sanitizePositiveIntegerInput(e.target.value) })} />{errors.delivery_days?.[0] ? <p className="text-xs text-destructive">{errors.delivery_days[0]}</p> : null}</div>
                 {message ? <p className="text-sm text-destructive">{message}</p> : null}
                 <Button className="w-full" disabled={submitting}>{submitting ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}{submitting ? (isEnglish ? 'Sending...' : 'جار الإرسال...') : (isEnglish ? 'Send Request' : 'إرسال الطلب')}</Button>
               </form>
             </CardContent></Card>
-            <Card><CardHeader><CardTitle>{service.title}</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><p className="text-muted-foreground">{service.description || (isEnglish ? 'No description.' : 'لا يوجد وصف.')}</p><p>{isEnglish ? 'Provider:' : 'مقدم الخدمة:'}{' '}{service.user?.id && service.user.role === 'personal' ? <Link to={`/freelancers/${service.user.id}`} className="font-medium text-primary hover:underline">{service.user.name}</Link> : service.user?.name}</p><p>{isEnglish ? 'Price:' : 'السعر:'} {service.price}</p><p>{isEnglish ? 'Default delivery:' : 'مدة التسليم:'} {service.delivery_days} {isEnglish ? 'days' : 'يوم'}</p></CardContent></Card>
+            <Card><CardHeader><CardTitle>{service.title}</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><p className="text-muted-foreground">{service.description || (isEnglish ? 'No description.' : 'لا يوجد وصف.')}</p><p>{isEnglish ? 'Provider:' : 'مقدم الخدمة:'}{' '}{service.user?.id && service.user.role === 'personal' ? <Link to={`/freelancers/${service.user.id}`} className="font-medium text-primary hover:underline">{service.user.name}</Link> : service.user?.name}</p><p>{isEnglish ? 'Price:' : 'السعر:'} {formatUsd(service.price, isEnglish ? 'en' : 'ar')}</p><p>{isEnglish ? 'Default delivery:' : 'مدة التسليم:'} {service.delivery_days} {isEnglish ? 'days' : 'يوم'}</p></CardContent></Card>
           </div>
         )}
       </div>

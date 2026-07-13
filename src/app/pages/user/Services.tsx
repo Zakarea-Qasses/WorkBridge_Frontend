@@ -9,12 +9,10 @@ import { getServices, type Service } from '@/app/api/pages/user/services';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import { categoryDisplayName } from '@/app/utils/categoryLabels';
+import { formatUsd } from '@/app/utils/money';
 
 function formatPrice(value: number | string, isEnglish: boolean) {
-  const amount = Number(value);
-  return Number.isFinite(amount)
-    ? new Intl.NumberFormat(isEnglish ? 'en' : 'ar', { maximumFractionDigits: 2 }).format(amount)
-    : String(value || '');
+  return formatUsd(value, isEnglish ? 'en' : 'ar');
 }
 
 function ServiceSkeleton() {

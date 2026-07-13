@@ -82,3 +82,22 @@ export async function getProjects(params?: {
   );
   return response.projects;
 }
+
+export async function getMyProjects(page = 1) {
+  const response = await apiRequest<{ projects: PaginatedResponse<UserProject> }>(
+    `/projects/mine?page=${page}`,
+  );
+  return response.projects;
+}
+
+export async function updateProjectStatus(id: number, status: 'active' | 'paused') {
+  const response = await apiRequest<{ message: string; project: UserProject }>(`/projects/${id}`, {
+    method: 'PUT',
+    body: { status },
+  });
+  return response.project;
+}
+
+export function deleteProject(id: number) {
+  return apiRequest(`/projects/${id}`, { method: 'DELETE' });
+}

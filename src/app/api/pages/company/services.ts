@@ -1,6 +1,6 @@
 import { apiRequest } from '@/app/api/client';
 
-import type { Category, Service, Conversation, Report, CreateReportPayload } from '../../types';
+import type { Category, Service, Conversation, PaginatedResponse, Report, CreateReportPayload } from '../../types';
 
 export type { Service } from '../../types';
 
@@ -56,8 +56,11 @@ export async function createReport(payload: CreateReportPayload) {
 }
 
 export async function getServices() {
-  const response = await apiRequest<{ services: Service[] }>('/services');
-  return response.services;
+  const response = await apiRequest<{
+    available_services_count: number;
+    services: PaginatedResponse<Service>;
+  }>('/company/services');
+  return response.services.data;
 }
 
 export async function startConversation(userId: number) {

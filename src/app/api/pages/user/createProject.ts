@@ -1,8 +1,8 @@
 import { apiRequest } from '@/app/api/client';
 
-import type { Category, LocationOption, ProjectSkill } from '../../types';
+import type { Category, LocationOption } from '../../types';
 
-export type { Category, LocationOption, ProjectSkill } from '../../types';
+export type { Category, LocationOption } from '../../types';
 
 export function createProject(payload: Record<string, unknown>) {
   return apiRequest('/projects', { method: 'POST', body: payload });
@@ -19,9 +19,4 @@ export function getCitiesByGovernorate(governorateId: string | number) {
 
 export function getGovernorates() {
   return apiRequest<LocationOption[]>('/governorates');
-}
-
-export async function getSkills() {
-  const response = await apiRequest<{ skills: ProjectSkill[] }>('/skills');
-  return response.skills;
 }

@@ -78,8 +78,8 @@ export default function HelpCenter() {
               <CardTitle>{isEnglish ? 'Direct Contact' : 'التواصل المباشر'}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm leading-6 text-muted-foreground">
-              <p>{isEnglish ? 'Email: support@workbridge.com' : 'البريد: support@workbridge.com'}</p>
-              <p>{isEnglish ? 'Phone: +963 11 000 0000' : 'الهاتف: +963 11 000 0000'}</p>
+              <p>{isEnglish ? 'Email: workbridgeAdmin@gmail.com' : 'البريد: workbridgeAdmin@gmail.com'}</p>
+              <p>{isEnglish ? 'Phone: 0958373965' : 'الهاتف: 0958373965'}</p>
               <p>{isEnglish ? 'Hours: 9 AM to 5 PM' : 'أوقات الاستجابة: من 9 صباحًا حتى 5 مساءً'}</p>
             </CardContent>
           </Card>

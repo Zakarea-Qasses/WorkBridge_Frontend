@@ -19,6 +19,7 @@ import {
 } from '@/app/api/pages/company/serviceRequests';
 import { useAuth } from '@/app/providers/AuthProvider';
 import { useLanguage } from '@/app/providers/LanguageProvider';
+import { formatUsd } from '@/app/utils/money';
 
 function statusLabel(status: ServiceRequest['status'], isEnglish: boolean) {
   const labels: Record<ServiceRequest['status'], [string, string]> = {
@@ -62,10 +63,7 @@ function formatPrice(value: number | string | null | undefined, isEnglish: boole
     return isEnglish ? 'Price not set' : 'لم يتم تحديد السعر';
   }
 
-  const amount = Number(value);
-  return Number.isFinite(amount)
-    ? new Intl.NumberFormat(isEnglish ? 'en' : 'ar', { maximumFractionDigits: 2 }).format(amount)
-    : String(value);
+  return formatUsd(value, isEnglish ? 'en' : 'ar');
 }
 
 function getLoadErrorMessage(error: unknown, isEnglish: boolean) {

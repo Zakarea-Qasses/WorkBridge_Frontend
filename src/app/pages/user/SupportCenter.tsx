@@ -75,9 +75,6 @@ function attachmentUrl(attachment: ReportAttachment) {
 function categoryLabel(category: string, isEnglish: boolean) {
   const labels: Record<string, { ar: string; en: string }> = {
     support: { ar: 'دعم عام', en: 'Support' },
-    complaint: { ar: 'شكوى', en: 'Complaint' },
-    dispute: { ar: 'نزاع', en: 'Dispute' },
-    payment: { ar: 'مشكلة دفع', en: 'Payment' },
     technical: { ar: 'مشكلة تقنية', en: 'Technical' },
   };
 
@@ -85,9 +82,6 @@ function categoryLabel(category: string, isEnglish: boolean) {
 }
 
 function categoryClasses(category: string) {
-  if (category === 'dispute') return 'bg-red-100 text-red-700 border-red-200';
-  if (category === 'complaint') return 'bg-amber-100 text-amber-700 border-amber-200';
-  if (category === 'payment') return 'bg-green-100 text-green-700 border-green-200';
   if (category === 'technical') return 'bg-purple-100 text-purple-700 border-purple-200';
   return 'bg-blue-100 text-blue-700 border-blue-200';
 }
@@ -192,7 +186,11 @@ export default function SupportCenter() {
     try {
       const response = await getMyReports(page);
       if (requestId !== requestIdRef.current) return;
-      setReports(response.data);
+      setReports(
+        response.data.filter(
+          (report) => report.target_type === 'general' && ['support', 'technical'].includes(report.category),
+        ),
+      );
       setLastPage(response.last_page || 1);
     } catch (error) {
       if (requestId !== requestIdRef.current) return;
@@ -347,7 +345,7 @@ export default function SupportCenter() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {(['support', 'complaint', 'payment', 'technical'] as const).map(
+                        {(['support', 'technical'] as const).map(
                           (category) => (
                             <SelectItem key={category} value={category}>
                               {categoryLabel(category, isEnglish)}

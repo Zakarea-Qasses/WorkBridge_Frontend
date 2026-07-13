@@ -19,6 +19,7 @@ import {
   useConfirmDialog,
 } from '@/app/components/ui';
 import { getApiErrorMessage } from '@/app/api/client';
+import { formatUsd } from '@/app/utils/money';
 import {
   AdminContentStatus,
   AdminContentType,
@@ -107,14 +108,7 @@ function formatAmount(value: number | string | null | undefined, isEnglish: bool
     return isEnglish ? 'Not available' : 'غير متوفر';
   }
 
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) {
-    return String(value);
-  }
-
-  return new Intl.NumberFormat(isEnglish ? 'en' : 'ar', {
-    maximumFractionDigits: 2,
-  }).format(amount);
+  return formatUsd(value, isEnglish ? 'en' : 'ar');
 }
 
 function getOwnerName(item: AdminContentItem, type: AdminContentType) {

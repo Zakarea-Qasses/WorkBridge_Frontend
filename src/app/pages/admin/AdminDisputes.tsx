@@ -25,6 +25,7 @@ import {
   ReportDecisionPayload,
   updateReportDecision,
 } from '@/app/api/pages/admin/disputes';
+import { formatUsd } from '@/app/utils/money';
 
 type StatusMessage = { type: 'success' | 'error'; message: string } | null;
 type AdminAction = NonNullable<ReportDecisionPayload['admin_action']>;
@@ -48,9 +49,7 @@ function attachmentUrl(attachment: ReportAttachment) {
 }
 
 function formatAmount(value: number | string | null | undefined, isEnglish: boolean) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return isEnglish ? 'Unavailable' : 'غير متوفر';
-  return new Intl.NumberFormat(isEnglish ? 'en' : 'ar', { maximumFractionDigits: 2 }).format(amount);
+  return formatUsd(value, isEnglish ? 'en' : 'ar');
 }
 
 function formatDate(value: string | undefined, isEnglish: boolean) {
@@ -80,6 +79,15 @@ function statusClass(status: string) {
 
 function isDisputeReport(report: Report) {
   return Boolean(report.contract_id || report.target_type === 'contract' || ['dispute', 'payment'].includes(report.category));
+}
+
+function categoryLabel(category: string, isEnglish: boolean) {
+  const labels: Record<string, [string, string]> = {
+    complaint: ['Complaint', 'شكوى'],
+    dispute: ['Dispute', 'نزاع'],
+    payment: ['Payment issue', 'مشكلة دفع'],
+  };
+  return labels[category]?.[isEnglish ? 0 : 1] || category;
 }
 
 export default function AdminDisputes() {
@@ -174,8 +182,8 @@ export default function AdminDisputes() {
             </h2>
             <p className="mt-2 text-muted-foreground">
               {isEnglish
-                ? 'Review contract disputes and payment reports.'
-                : 'مراجعة نزاعات العقود وبلاغات الدفع.'}
+                ? 'Review contract complaints, disputes, and payment issues.'
+                : 'مراجعة شكاوى العقود والنزاعات ومشاكل الدفع.'}
             </p>
           </div>
           <Button variant="outline" disabled={loading} onClick={() => void loadDisputes()}>
@@ -229,7 +237,7 @@ export default function AdminDisputes() {
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.9fr]">
           <Card>
             <CardHeader>
-              <CardTitle>{isEnglish ? 'Open disputes' : 'النزاعات المفتوحة'}</CardTitle>
+              <CardTitle>{isEnglish ? 'Open cases' : 'الحالات المفتوحة'}</CardTitle>
               <CardDescription>
                 {isEnglish ? 'Select a dispute to review and decide.' : 'اختر نزاعا لمراجعته واتخاذ القرار.'}
               </CardDescription>
@@ -266,7 +274,10 @@ export default function AdminDisputes() {
                           {formatDate(report.created_at, isEnglish)}
                         </p>
                       </div>
-                      <Badge className={statusClass(report.status)}>{statusLabel(report.status, isEnglish)}</Badge>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="outline">{categoryLabel(report.category, isEnglish)}</Badge>
+                        <Badge className={statusClass(report.status)}>{statusLabel(report.status, isEnglish)}</Badge>
+                      </div>
                     </div>
                   </button>
                 ))
@@ -292,6 +303,7 @@ export default function AdminDisputes() {
                 <>
                   <div className="rounded-lg border bg-muted/20 p-4 text-sm">
                     <h3 className="font-semibold">{selectedReport.title || `#${selectedReport.id}`}</h3>
+                    <Badge variant="outline" className="mt-2">{categoryLabel(selectedReport.category, isEnglish)}</Badge>
                     <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{selectedReport.description}</p>
                     <div className="mt-3 space-y-1 text-muted-foreground">
                       <p>
@@ -387,14 +399,14 @@ export default function AdminDisputes() {
                           onClick={() => void decide(selectedReport, 'accepted')}
                         >
                           {busyId === selectedReport.id ? <LoaderCircle className="me-2 size-4 animate-spin" /> : null}
-                          {isEnglish ? 'Accept dispute' : 'قبول النزاع'}
+                          {isEnglish ? 'Accept case' : 'قبول الحالة'}
                         </Button>
                         <Button
                           variant="outline"
                           disabled={busyId === selectedReport.id}
                           onClick={() => void decide(selectedReport, 'rejected')}
                         >
-                          {isEnglish ? 'Reject dispute' : 'رفض النزاع'}
+                          {isEnglish ? 'Reject case' : 'رفض الحالة'}
                         </Button>
                       </div>
                     </>
@@ -415,7 +427,7 @@ export default function AdminDisputes() {
         {resolvedDisputes.length > 0 ? (
           <Card>
             <CardHeader>
-              <CardTitle>{isEnglish ? 'Resolved disputes' : 'النزاعات المعالجة'}</CardTitle>
+              <CardTitle>{isEnglish ? 'Resolved cases' : 'الحالات المعالجة'}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {resolvedDisputes.map((report) => (

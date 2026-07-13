@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowLeft, ArrowRight, Check, ChevronDown, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { useLanguage } from '@/app/providers/LanguageProvider';
 import {
@@ -23,13 +23,12 @@ import {
   getCategories,
   getCitiesByGovernorate,
   getGovernorates,
-  getSkills,
   type Category,
   type LocationOption,
-  type ProjectSkill,
 } from '@/app/api/pages/user/createProject';
 import { createProject } from '@/app/api/pages/user/createProject';
 import { categoryDisplayName } from '@/app/utils/categoryLabels';
+import { sanitizePositiveIntegerInput, sanitizePositiveMoneyInput } from '@/app/utils/money';
 
 export default function CreateProject() {
   const navigate = useNavigate();
@@ -40,9 +39,6 @@ export default function CreateProject() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [governorates, setGovernorates] = useState<LocationOption[]>([]);
   const [cities, setCities] = useState<LocationOption[]>([]);
-  const [skills, setSkills] = useState<ProjectSkill[]>([]);
-  const [selectedSkillIds, setSelectedSkillIds] = useState<number[]>([]);
-  const [skillsOpen, setSkillsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -56,11 +52,10 @@ export default function CreateProject() {
   });
 
   useEffect(() => {
-    Promise.all([getCategories(), getGovernorates(), getSkills()])
-      .then(([nextCategories, nextGovernorates, nextSkills]) => {
+    Promise.all([getCategories(), getGovernorates()])
+      .then(([nextCategories, nextGovernorates]) => {
         setCategories(nextCategories);
         setGovernorates(nextGovernorates);
-        setSkills(nextSkills);
         const firstGovernorate = nextGovernorates[0];
         if (firstGovernorate) {
           setFormData((current) => ({ ...current, governorateId: String(firstGovernorate.id) }));
@@ -110,7 +105,8 @@ export default function CreateProject() {
         budget: Number(formData.budget),
         duration_days: Number(formData.duration_days),
         category_id: Number(formData.category_id),
-        skills: selectedSkillIds,
+        governorate_id: formData.governorateId ? Number(formData.governorateId) : null,
+        city_id: formData.cityId ? Number(formData.cityId) : null,
       });
       navigate('/projects');
     } catch (submitError) {
@@ -182,12 +178,13 @@ export default function CreateProject() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">{isEnglish ? 'Budget' : 'الميزانية'}</label>
+                  <label className="text-sm font-medium">{isEnglish ? 'Budget ($)' : 'الميزانية ($)'}</label>
                   <Input
-                    type="number"
-                    min="0"
+                    type="text"
+                    inputMode="decimal"
                     value={formData.budget}
-                    onChange={(event) => handleChange('budget', event.target.value)}
+                    onChange={(event) => handleChange('budget', sanitizePositiveMoneyInput(event.target.value))}
+                    placeholder="$0.00"
                   />
                   {fieldErrors.budget?.[0] ? <p className="text-xs text-destructive">{fieldErrors.budget[0]}</p> : null}
                 </div>
@@ -195,10 +192,10 @@ export default function CreateProject() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">{isEnglish ? 'Project Duration in Days' : 'مدة المشروع بالأيام'}</label>
                   <Input
-                    type="number"
-                    min="1"
+                    type="text"
+                    inputMode="numeric"
                     value={formData.duration_days}
-                    onChange={(event) => handleChange('duration_days', event.target.value)}
+                    onChange={(event) => handleChange('duration_days', sanitizePositiveIntegerInput(event.target.value))}
                   />
                   {fieldErrors.duration_days?.[0] ? <p className="text-xs text-destructive">{fieldErrors.duration_days[0]}</p> : null}
                 </div>
@@ -256,90 +253,6 @@ export default function CreateProject() {
                   </SelectContent>
                 </Select>
                 {fieldErrors.category_id?.[0] ? <p className="text-xs text-destructive">{fieldErrors.category_id[0]}</p> : null}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  {isEnglish ? 'Required Skills' : 'المهارات المطلوبة'}
-                </label>
-                <div className="relative">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    aria-expanded={skillsOpen}
-                    onClick={() => setSkillsOpen((open) => !open)}
-                    className="w-full justify-between font-normal"
-                  >
-                      <span className="truncate">
-                        {selectedSkillIds.length
-                          ? isEnglish
-                            ? `${selectedSkillIds.length} skills selected`
-                            : `تم اختيار ${selectedSkillIds.length} مهارة`
-                          : isEnglish
-                            ? 'Choose skills'
-                            : 'اختر المهارات'}
-                      </span>
-                      <ChevronDown
-                        className={`size-4 shrink-0 text-muted-foreground transition-transform ${skillsOpen ? 'rotate-180' : ''}`}
-                      />
-                  </Button>
-                  {skillsOpen ? (
-                    <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
-                    {skills.length ? (
-                      skills.map((skill) => (
-                        <button
-                          type="button"
-                          key={skill.id}
-                          onClick={() => {
-                            const checked = !selectedSkillIds.includes(skill.id);
-                            setSelectedSkillIds((current) =>
-                              checked
-                                ? [...current, skill.id]
-                                : current.filter((id) => id !== skill.id),
-                            );
-                            setFieldErrors((current) => ({ ...current, skills: [] }));
-                          }}
-                          className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-start text-sm hover:bg-accent"
-                        >
-                          <span className="flex size-4 shrink-0 items-center justify-center rounded-sm border">
-                            {selectedSkillIds.includes(skill.id) ? <Check className="size-3.5" /> : null}
-                          </span>
-                          {skill.name}
-                        </button>
-                      ))
-                    ) : (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">
-                        {isEnglish ? 'No skills available.' : 'لا توجد مهارات متاحة.'}
-                      </div>
-                    )}
-                    </div>
-                  ) : null}
-                </div>
-                {selectedSkillIds.length ? (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {skills
-                      .filter((skill) => selectedSkillIds.includes(skill.id))
-                      .map((skill) => (
-                        <span
-                          key={skill.id}
-                          className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-sm"
-                        >
-                          {skill.name}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setSelectedSkillIds((current) => current.filter((id) => id !== skill.id))
-                            }
-                            aria-label={isEnglish ? `Remove ${skill.name}` : `إزالة ${skill.name}`}
-                            className="text-muted-foreground hover:text-foreground"
-                          >
-                            <X className="size-3.5" />
-                          </button>
-                        </span>
-                      ))}
-                  </div>
-                ) : null}
-                {fieldErrors.skills?.[0] ? <p className="text-xs text-destructive">{fieldErrors.skills[0]}</p> : null}
               </div>
 
               {error ? <p className="text-sm text-destructive">{error}</p> : null}
