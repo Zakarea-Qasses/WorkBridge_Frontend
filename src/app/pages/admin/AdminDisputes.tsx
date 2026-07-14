@@ -10,11 +10,6 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Textarea,
 } from '@/app/components/ui';
 import { getApiErrorMessage } from '@/app/api/client';
@@ -28,7 +23,6 @@ import {
 import { formatUsd } from '@/app/utils/money';
 
 type StatusMessage = { type: 'success' | 'error'; message: string } | null;
-type AdminAction = NonNullable<ReportDecisionPayload['admin_action']>;
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
 const BACKEND_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
@@ -95,7 +89,6 @@ export default function AdminDisputes() {
   const [reports, setReports] = useState<Report[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [decisionNotes, setDecisionNotes] = useState<Record<number, string>>({});
-  const [adminActions, setAdminActions] = useState<Record<number, AdminAction | undefined>>({});
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [status, setStatus] = useState<StatusMessage>(null);
@@ -136,24 +129,10 @@ export default function AdminDisputes() {
     try {
       setBusyId(report.id);
       setStatus(null);
-      const action = adminActions[report.id];
-      if (decision === 'accepted' && report.contract_id && !action) {
-        setStatus({
-          type: 'error',
-          message: isEnglish
-            ? 'Choose whether to refund the client or release the amount to the provider.'
-            : 'اختر إعادة المبلغ للعميل أو تحريره لمقدم الخدمة.',
-        });
-        return;
-      }
       const payload: ReportDecisionPayload = {
         status: decision,
         admin_decision: decisionNotes[report.id]?.trim() || null,
       };
-
-      if (decision === 'accepted' && report.contract_id && action) {
-        payload.admin_action = action;
-      }
 
       const updated = await updateReportDecision(report.id, payload);
       setReports((current) =>
@@ -290,8 +269,8 @@ export default function AdminDisputes() {
               <CardTitle>{isEnglish ? 'Final decision' : 'القرار النهائي'}</CardTitle>
               <CardDescription>
                 {isEnglish
-                  ? 'Accept or reject the dispute. Contract disputes can include a financial action.'
-                  : 'اقبل أو ارفض النزاع. نزاعات العقود يمكن أن تتضمن إجراء ماليا.'}
+                  ? 'Review the case, add a note, then accept or reject it.'
+                  : 'راجع الحالة وأضف ملاحظة ثم اقبلها أو ارفضها.'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -368,30 +347,6 @@ export default function AdminDisputes() {
                           }))
                         }
                       />
-
-                      {selectedReport.contract_id ? (
-                        <Select
-                          value={adminActions[selectedReport.id]}
-                          onValueChange={(value) =>
-                            setAdminActions((current) => ({
-                              ...current,
-                              [selectedReport.id]: value as AdminAction,
-                            }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={isEnglish ? 'Choose financial decision' : 'اختر القرار المالي'} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="refund_client">
-                              {isEnglish ? 'Refund client' : 'إرجاع المبلغ للعميل'}
-                            </SelectItem>
-                            <SelectItem value="release_freelancer">
-                              {isEnglish ? 'Release to provider' : 'تحرير المبلغ لمقدم الخدمة'}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : null}
 
                       <div className="flex flex-wrap gap-2">
                         <Button

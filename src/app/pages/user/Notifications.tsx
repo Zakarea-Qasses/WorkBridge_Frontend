@@ -46,6 +46,10 @@ function notificationTypeLabel(type: string | null, isEnglish: boolean) {
     service_request_rejected: ['Service request rejected', 'رفض طلب خدمة'],
     new_report: ['New report', 'بلاغ جديد'],
     report_decision: ['Report decision', 'قرار بلاغ'],
+    report_accepted: ['Report accepted', 'قبول البلاغ'],
+    report_rejected: ['Report rejected', 'رفض البلاغ'],
+    contract_dispute_accepted: ['Dispute accepted', 'قبول النزاع'],
+    contract_dispute_rejected: ['Dispute rejected', 'رفض النزاع'],
     wallet_deposit: ['Wallet deposit', 'إيداع محفظة'],
     wallet_withdraw: ['Wallet withdrawal', 'سحب محفظة'],
     contract_created: ['Contract', 'عقد'],
@@ -122,6 +126,22 @@ const englishNotificationText: Record<string, { title: string; message: string }
   report_decision: {
     title: 'Report decision',
     message: 'The admin has updated the decision for your report.',
+  },
+  report_accepted: {
+    title: 'Report accepted',
+    message: 'The admin has accepted your report.',
+  },
+  report_rejected: {
+    title: 'Report rejected',
+    message: 'The admin has rejected your report.',
+  },
+  contract_dispute_accepted: {
+    title: 'Dispute accepted',
+    message: 'The admin has accepted the dispute you submitted.',
+  },
+  contract_dispute_rejected: {
+    title: 'Dispute rejected',
+    message: 'The admin has rejected the dispute you submitted.',
   },
   project_created: {
     title: 'Project published',

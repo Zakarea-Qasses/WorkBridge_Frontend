@@ -280,6 +280,7 @@ export interface Contract {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  has_opened_issue?: boolean;
   client: Pick<WorkBridgeUser, 'id' | 'name' | 'email'>;
   freelancer: Pick<WorkBridgeUser, 'id' | 'name' | 'email'>;
   project?: { id: number; title: string } | null;
@@ -379,6 +380,7 @@ export interface WalletRequest {
   amount: number | string;
   status: WalletRequestStatus;
   payment_note: string | null;
+  deposit_reference: string | null;
   deposit_receipt_path: string | null;
   deposit_receipt_url: string | null;
   withdrawal_details: string | null;

@@ -370,7 +370,8 @@ export default function CompanyContracts() {
               const canStart = !isJobContract && isClient && contract.status === 'pending';
               const canComplete = !isJobContract && isClient && ['funded', 'in_progress'].includes(contract.status);
               const canCancel = !['completed', 'canceled', 'refunded', 'dispute'].includes(contract.status);
-              const canOpenIssue = ['funded', 'in_progress'].includes(contract.status);
+              const issueStatusAllowsSubmission = ['funded', 'in_progress', 'dispute'].includes(contract.status);
+              const canOpenIssue = issueStatusAllowsSubmission && !contract.has_opened_issue;
 
               return (
                 <Card key={contract.id}>
@@ -465,11 +466,19 @@ export default function CompanyContracts() {
                         variant="outline"
                         className="border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
                         disabled={isBusy || !canOpenIssue}
-                        title={!canOpenIssue ? (isEnglish ? 'Available after funding and starting the contract' : 'يتاح بعد تمويل العقد وبدء تنفيذه') : undefined}
+                        title={
+                          contract.has_opened_issue
+                            ? (isEnglish ? 'You already submitted your case for this contract' : 'لقد أرسلت نزاعك على هذا العقد مسبقاً')
+                            : !issueStatusAllowsSubmission
+                              ? (isEnglish ? 'Available after starting the contract' : 'يتاح بعد بدء تنفيذ العقد')
+                              : undefined
+                        }
                         onClick={() => setIssueContractId(contract.id)}
                       >
                         <ShieldAlert className="me-2 size-4" />
-                        {isEnglish ? 'Open complaint or dispute' : 'فتح نزاع أو شكوى'}
+                        {contract.has_opened_issue
+                          ? (isEnglish ? 'Case submitted' : 'تم إرسال النزاع')
+                          : (isEnglish ? 'Open complaint or dispute' : 'فتح نزاع أو شكوى')}
                       </Button>
                     </div>
                     {issueContractId === contract.id ? (

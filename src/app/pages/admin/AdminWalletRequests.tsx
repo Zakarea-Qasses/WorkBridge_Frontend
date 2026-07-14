@@ -237,6 +237,14 @@ export default function AdminWalletRequests() {
                       </TableCell>
                       <TableCell className="max-w-[260px]">
                         <div className="space-y-2 text-sm text-muted-foreground">
+                          {request.type === 'deposit' && request.deposit_reference ? (
+                            <div>
+                              <span className="font-medium text-foreground">
+                                {isEnglish ? 'Deposit reference:' : 'رقم الإيداع:'}
+                              </span>{' '}
+                              <span dir="ltr" className="font-mono">{request.deposit_reference}</span>
+                            </div>
+                          ) : null}
                           <div className="whitespace-pre-line">
                             {request.type === 'deposit'
                               ? request.payment_note || (isEnglish ? 'No note' : 'لا توجد ملاحظة')

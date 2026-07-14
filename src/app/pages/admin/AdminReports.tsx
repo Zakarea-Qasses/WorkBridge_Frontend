@@ -31,7 +31,6 @@ import { formatUsd } from '@/app/utils/money';
 type StatusMessage = { type: 'success' | 'error'; message: string } | null;
 type ReportStatusFilter = 'all' | 'pending' | 'accepted' | 'rejected';
 type ReportCategoryFilter = 'all' | 'support' | 'complaint' | 'technical';
-type AdminAction = NonNullable<ReportDecisionPayload['admin_action']> | 'none';
 
 function isContractCase(report: Report) {
   return Boolean(
@@ -183,7 +182,6 @@ export default function AdminReports() {
   const { language, isEnglish } = useLanguage();
   const [reports, setReports] = useState<Report[]>([]);
   const [decisionNotes, setDecisionNotes] = useState<Record<number, string>>({});
-  const [adminActions, setAdminActions] = useState<Record<number, AdminAction>>({});
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ReportStatusFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<ReportCategoryFilter>('all');
@@ -244,15 +242,10 @@ export default function AdminReports() {
       setBusyId(report.id);
       setStatus(null);
 
-      const adminAction = adminActions[report.id] || 'none';
       const payload: ReportDecisionPayload = {
         status: decision,
         admin_decision: decisionNotes[report.id]?.trim() || null,
       };
-
-      if (decision === 'accepted' && report.contract_id && adminAction !== 'none') {
-        payload.admin_action = adminAction;
-      }
 
       const updated = await updateReportDecision(report.id, payload);
       setReports((current) =>
@@ -519,33 +512,6 @@ export default function AdminReports() {
                             }))
                           }
                         />
-
-                        {report.contract_id ? (
-                          <Select
-                            value={adminActions[report.id] || 'none'}
-                            onValueChange={(value) =>
-                              setAdminActions((current) => ({
-                                ...current,
-                                [report.id]: value as AdminAction,
-                              }))
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">
-                                {isEnglish ? 'No financial action' : 'بدون إجراء مالي'}
-                              </SelectItem>
-                              <SelectItem value="refund_client">
-                                {isEnglish ? 'Refund client' : 'إرجاع المبلغ للعميل'}
-                              </SelectItem>
-                              <SelectItem value="release_freelancer">
-                                {isEnglish ? 'Release to provider' : 'تحرير المبلغ لمقدم الخدمة'}
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        ) : null}
 
                         <div className="flex flex-wrap gap-2">
                           <Button
