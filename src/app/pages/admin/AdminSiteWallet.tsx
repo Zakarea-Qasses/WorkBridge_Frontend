@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
   Clock,
   Landmark,
+  LoaderCircle,
   RefreshCw,
   ShieldCheck,
   Wallet as WalletIcon,
@@ -18,6 +19,13 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Table,
   TableBody,
   TableCell,
@@ -25,14 +33,20 @@ import {
   TableHeader,
   TableRow,
 } from '@/app/components/ui';
-import { getApiErrorMessage } from '@/app/api/client';
+import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import {
   Wallet,
   WalletTransaction,
   getAdminTransactionsWallet,
   getEscrowTransactionsWallet,
+  withdrawAdminEarnings,
 } from '@/app/api/pages/admin/siteWallet';
-import { formatUsd } from '@/app/utils/money';
+import { formatUsd, parsePositiveMoney, sanitizePositiveMoneyInput } from '@/app/utils/money';
+import {
+  DEFAULT_WALLET_PAYMENT_METHOD,
+  WALLET_PAYMENT_METHODS,
+  type WalletPaymentMethod,
+} from '@/app/utils/walletPaymentMethods';
 
 function toAmount(value: number | string | null | undefined) {
   const amount = Number(value);
@@ -63,6 +77,7 @@ function transactionTypeLabel(type: string, isEnglish: boolean) {
     admin_receive: ['Admin receipt', 'استلام إداري'],
     deposit: ['Deposit', 'إيداع'],
     withdraw: ['Withdrawal', 'سحب'],
+    admin_withdrawal: ['Admin earnings withdrawal', 'سحب أرباح الأدمن'],
   };
 
   return labels[type]?.[isEnglish ? 0 : 1] || type.replaceAll('_', ' ');
@@ -91,6 +106,12 @@ export default function AdminSiteWallet() {
   const [adminWallet, setAdminWallet] = useState<Wallet | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<WalletPaymentMethod>(DEFAULT_WALLET_PAYMENT_METHOD);
+  const [recipientAccount, setRecipientAccount] = useState('');
+  const [withdrawError, setWithdrawError] = useState('');
+  const [withdrawSuccess, setWithdrawSuccess] = useState('');
+  const [withdrawing, setWithdrawing] = useState(false);
 
   const loadWallets = useCallback(async () => {
     setLoading(true);
@@ -140,6 +161,55 @@ export default function AdminSiteWallet() {
         .reduce((total, transaction) => total + toAmount(transaction.amount), 0),
     [escrowTransactions],
   );
+
+  const handleWithdraw = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (withdrawing) return;
+
+    const amount = parsePositiveMoney(withdrawAmount);
+    if (amount === null) {
+      setWithdrawError(isEnglish ? 'Enter an amount greater than zero.' : 'أدخل مبلغاً أكبر من صفر.');
+      return;
+    }
+
+    if (amount > toAmount(adminWallet?.balance)) {
+      setWithdrawError(isEnglish ? 'Insufficient admin wallet balance.' : 'رصيد محفظة الأدمن غير كاف.');
+      return;
+    }
+
+    if (!recipientAccount.trim()) {
+      setWithdrawError(isEnglish ? 'Enter the receiving account number.' : 'أدخل رقم حساب الاستلام.');
+      return;
+    }
+
+    try {
+      setWithdrawing(true);
+      setWithdrawError('');
+      setWithdrawSuccess('');
+      const response = await withdrawAdminEarnings({
+        amount,
+        payment_method: paymentMethod,
+        recipient_account: recipientAccount.trim(),
+      });
+      setWithdrawAmount('');
+      setRecipientAccount('');
+      setWithdrawSuccess(
+        isEnglish ? 'Earnings withdrawn and recorded successfully.' : 'تم سحب الأرباح وتسجيل العملية بنجاح.',
+      );
+      await loadWallets();
+      return response;
+    } catch (requestError) {
+      const validationErrors = getValidationErrors(requestError);
+      setWithdrawError(
+        validationErrors.amount?.[0] ||
+          validationErrors.recipient_account?.[0] ||
+          validationErrors.payment_method?.[0] ||
+          getApiErrorMessage(requestError),
+      );
+    } finally {
+      setWithdrawing(false);
+    }
+  };
 
   return (
     <DashboardLayout userType="admin">
@@ -229,6 +299,95 @@ export default function AdminSiteWallet() {
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{isEnglish ? 'Withdraw admin earnings' : 'سحب أرباح الأدمن'}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="grid gap-4 md:grid-cols-3" onSubmit={handleWithdraw}>
+              <div className="space-y-2">
+                <Label htmlFor="admin-withdraw-amount">{isEnglish ? 'Amount' : 'المبلغ'}</Label>
+                <Input
+                  id="admin-withdraw-amount"
+                  type="text"
+                  inputMode="decimal"
+                  value={withdrawAmount}
+                  onChange={(event) => {
+                    setWithdrawAmount(sanitizePositiveMoneyInput(event.target.value));
+                    setWithdrawError('');
+                    setWithdrawSuccess('');
+                  }}
+                  placeholder="$0.00"
+                  disabled={loading || withdrawing}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="admin-withdraw-method">
+                  {isEnglish ? 'Receiving method' : 'طريقة الاستلام'}
+                </Label>
+                <Select
+                  value={paymentMethod}
+                  onValueChange={(value) => setPaymentMethod(value as WalletPaymentMethod)}
+                  disabled={loading || withdrawing}
+                >
+                  <SelectTrigger id="admin-withdraw-method">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WALLET_PAYMENT_METHODS.map((method) => (
+                      <SelectItem key={method.value} value={method.value}>
+                        {isEnglish ? method.labelEn : method.labelAr}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="admin-recipient-account">
+                  {isEnglish ? 'Receiving account number' : 'رقم حساب الاستلام'}
+                </Label>
+                <Input
+                  id="admin-recipient-account"
+                  value={recipientAccount}
+                  onChange={(event) => {
+                    setRecipientAccount(event.target.value);
+                    setWithdrawError('');
+                    setWithdrawSuccess('');
+                  }}
+                  maxLength={191}
+                  disabled={loading || withdrawing}
+                />
+              </div>
+
+              <div className="space-y-3 md:col-span-3">
+                {withdrawError ? (
+                  <p className="flex items-center gap-2 text-sm text-destructive">
+                    <AlertCircle className="size-4" />
+                    {withdrawError}
+                  </p>
+                ) : null}
+                {withdrawSuccess ? (
+                  <p className="flex items-center gap-2 text-sm text-green-700">
+                    <CheckCircle2 className="size-4" />
+                    {withdrawSuccess}
+                  </p>
+                ) : null}
+                <Button
+                  type="submit"
+                  disabled={loading || withdrawing || toAmount(adminWallet?.balance) <= 0}
+                >
+                  {withdrawing ? <LoaderCircle className="me-2 size-4 animate-spin" /> : <Landmark className="me-2 size-4" />}
+                  {withdrawing
+                    ? isEnglish ? 'Withdrawing...' : 'جاري السحب...'
+                    : isEnglish ? 'Withdraw earnings' : 'سحب الأرباح'}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
 
         <TransactionsTable
           title={isEnglish ? 'Escrow wallet transactions' : 'حركات محفظة الوسيط'}
