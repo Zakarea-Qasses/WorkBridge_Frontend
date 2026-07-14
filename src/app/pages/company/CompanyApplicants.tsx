@@ -4,9 +4,11 @@ import {
   AlertTriangle,
   BriefcaseBusiness,
   CheckCircle2,
+  Eye,
   LoaderCircle,
   MessageSquare,
   RefreshCw,
+  Star,
   Users,
   XCircle,
 } from 'lucide-react';
@@ -162,11 +164,13 @@ export default function CompanyApplicants() {
       applicant: isEnglish ? 'Applicant' : 'متقدم',
       email: isEnglish ? 'Email' : 'البريد الإلكتروني',
       profileTitle: isEnglish ? 'Profile title' : 'المسمى المهني',
+      profileRating: isEnglish ? 'Profile rating' : 'تقييم الملف',
       skills: isEnglish ? 'Skills' : 'المهارات',
       noSkills: isEnglish ? 'No skills added' : 'لم تتم إضافة مهارات',
       submittedAt: isEnglish ? 'Submitted at' : 'تاريخ التقديم',
       accept: isEnglish ? 'Accept' : 'قبول',
       reject: isEnglish ? 'Reject' : 'رفض',
+      viewProfile: isEnglish ? 'View profile' : 'عرض الملف الشخصي',
       message: isEnglish ? 'Message' : 'مراسلة',
       acceptedNotice: isEnglish
         ? 'Application accepted. Other applicants for this job were updated.'
@@ -468,7 +472,7 @@ export default function CompanyApplicants() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-5">
-                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                       <div>
                         <p className="text-xs text-muted-foreground">{labels.email}</p>
                         <p className="font-medium">{applicant?.email || labels.unavailable}</p>
@@ -476,6 +480,13 @@ export default function CompanyApplicants() {
                       <div>
                         <p className="text-xs text-muted-foreground">{labels.profileTitle}</p>
                         <p className="font-medium">{profile?.job_title || labels.unavailable}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">{labels.profileRating}</p>
+                        <p className="flex items-center gap-1 font-medium">
+                          <Star className="size-4 fill-amber-400 text-amber-400" />
+                          {Number(profile?.rating_avg || 0).toFixed(1)} / 5
+                        </p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">{labels.submittedAt}</p>
@@ -519,6 +530,16 @@ export default function CompanyApplicants() {
                       ) : (
                         <p className="text-sm text-muted-foreground">{labels.finalStatus}</p>
                       )}
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!applicant?.id}
+                        onClick={() => navigate(`/freelancers/${applicant?.id}`)}
+                      >
+                        <Eye className="me-2 size-4" />
+                        {labels.viewProfile}
+                      </Button>
 
                       <Button
                         variant="outline"

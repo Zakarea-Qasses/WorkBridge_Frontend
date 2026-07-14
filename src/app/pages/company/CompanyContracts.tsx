@@ -366,8 +366,9 @@ export default function CompanyContracts() {
               const isClient = contract.client_id === user?.id;
               const otherParty = isClient ? contract.freelancer : contract.client;
               const isBusy = busyId === contract.id;
-              const canStart = isClient && contract.status === 'pending';
-              const canComplete = isClient && ['funded', 'in_progress'].includes(contract.status);
+              const isJobContract = Boolean(contract.job_post_id);
+              const canStart = !isJobContract && isClient && contract.status === 'pending';
+              const canComplete = !isJobContract && isClient && ['funded', 'in_progress'].includes(contract.status);
               const canCancel = !['completed', 'canceled', 'refunded', 'dispute'].includes(contract.status);
               const canOpenIssue = ['funded', 'in_progress'].includes(contract.status);
 
@@ -400,8 +401,16 @@ export default function CompanyContracts() {
                         <p className="font-medium">{source.title ? `${source.type}: ${source.title}` : source.type}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">{isEnglish ? 'Amount' : 'قيمة العقد'}</p>
-                        <p className="font-medium">{formatAmount(contract.amount, isEnglish)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {isJobContract
+                            ? (isEnglish ? 'Salary' : 'الراتب')
+                            : (isEnglish ? 'Amount' : 'قيمة العقد')}
+                        </p>
+                        <p className="font-medium">
+                          {isJobContract && Number(contract.amount) <= 0
+                            ? (isEnglish ? 'Not specified' : 'غير محدد')
+                            : formatAmount(contract.amount, isEnglish)}
+                        </p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">{isEnglish ? 'Created at' : 'تاريخ الإنشاء'}</p>
@@ -412,7 +421,7 @@ export default function CompanyContracts() {
                       </div>
                     </div>
 
-                    <div className="grid gap-3 text-sm md:grid-cols-2">
+                    {!isJobContract ? <div className="grid gap-3 text-sm md:grid-cols-2">
                       <div className="rounded-md border bg-muted/30 p-3">
                         <p className="text-xs text-muted-foreground">
                           {isEnglish ? 'Funded at' : 'تاريخ البدء / التمويل'}
@@ -423,7 +432,7 @@ export default function CompanyContracts() {
                         <p className="text-xs text-muted-foreground">{isEnglish ? 'Completed at' : 'تاريخ الإكمال'}</p>
                         <p className="font-medium">{formatDate(contract.completed_at, isEnglish)}</p>
                       </div>
-                    </div>
+                    </div> : null}
 
                     <div className="flex flex-wrap gap-2">
                       <Button variant="outline" disabled={isBusy} onClick={() => void messageOtherParty(contract)}>

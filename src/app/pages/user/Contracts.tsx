@@ -151,15 +151,28 @@ export function ContractsPage({ userType = 'user' }: { userType?: 'user' | 'comp
             {contracts.map((contract) => {
               const isClient = contract.client_id === user?.id;
               const other = isClient ? contract.freelancer : contract.client;
+              const isJobContract = Boolean(contract.job_post_id);
               const canOpenIssue = ['funded', 'in_progress'].includes(contract.status);
               return (
                 <Card key={contract.id}>
                   <CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle>{contractTitle(contract, isEnglish)}</CardTitle><p className="mt-1 text-sm text-muted-foreground">{isEnglish ? 'With' : 'مع'} {other.name}</p></div><Badge variant="outline">{statusLabel(contract.status, isEnglish)}</Badge></div></CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid gap-2 text-sm sm:grid-cols-2"><p>{isEnglish ? 'Amount:' : 'المبلغ:'} {formatUsd(contract.amount, isEnglish ? 'en' : 'ar')}</p><p>{isEnglish ? 'Provider net:' : 'صافي مقدم الخدمة:'} {formatUsd(contract.freelancer_amount, isEnglish ? 'en' : 'ar')}</p></div>
+                    <div className="grid gap-2 text-sm sm:grid-cols-2">
+                      <p>
+                        {isJobContract ? (isEnglish ? 'Salary:' : 'الراتب:') : (isEnglish ? 'Amount:' : 'المبلغ:')}{' '}
+                        {isJobContract && Number(contract.amount) <= 0
+                          ? (isEnglish ? 'Not specified' : 'غير محدد')
+                          : formatUsd(contract.amount, isEnglish ? 'en' : 'ar')}
+                      </p>
+                      {isJobContract ? (
+                        <p>{isEnglish ? 'Non-financial employment contract' : 'عقد توظيف غير مالي'}</p>
+                      ) : (
+                        <p>{isEnglish ? 'Provider net:' : 'صافي مقدم الخدمة:'} {formatUsd(contract.freelancer_amount, isEnglish ? 'en' : 'ar')}</p>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       <Button variant="outline" disabled={busyId === contract.id} onClick={() => messageOtherParty(contract)}><MessageSquare className="me-2 size-4" />{isEnglish ? 'Message other party' : 'مراسلة الطرف الآخر'}</Button>
-                      {isClient && contract.status === 'pending' ? (
+                      {!isJobContract && isClient && contract.status === 'pending' ? (
                         <Button
                           disabled={busyId === contract.id}
                           onClick={() => runAction(contract, 'start')}
@@ -170,7 +183,7 @@ export function ContractsPage({ userType = 'user' }: { userType?: 'user' | 'comp
                           {isEnglish ? 'Fund and start contract' : 'تمويل وبدء العقد'}
                         </Button>
                       ) : null}
-                      {isClient && ['funded', 'in_progress'].includes(contract.status) ? <Button disabled={busyId === contract.id} onClick={() => runAction(contract, 'complete')}>{isEnglish ? 'Confirm completion' : 'تأكيد الإكمال'}</Button> : null}
+                      {!isJobContract && isClient && ['funded', 'in_progress'].includes(contract.status) ? <Button disabled={busyId === contract.id} onClick={() => runAction(contract, 'complete')}>{isEnglish ? 'Confirm completion' : 'تأكيد الإكمال'}</Button> : null}
                       {!['completed', 'canceled', 'refunded', 'dispute'].includes(contract.status) ? <Button variant="destructive" disabled={busyId === contract.id} onClick={() => runAction(contract, 'cancel')}>{isEnglish ? 'Cancel' : 'إلغاء'}</Button> : null}
                       <Button
                         variant="outline"
