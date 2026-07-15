@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { CheckCircle2, MessageSquare, RefreshCw, XCircle } from 'lucide-react';
 import DashboardLayout from '@/app/components/layout';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui';
+import { getApiErrorMessage, getValidationErrors } from '@/app/api/client';
 import { startConversation } from '@/app/api/pages/user/serviceRequests';
 import { acceptServiceRequest, getMyServiceRequests, getReceivedServiceRequests, rejectServiceRequest, type ServiceRequest } from '@/app/api/pages/user/serviceRequests';
 import { useLanguage } from '@/app/providers/LanguageProvider';
@@ -71,11 +72,25 @@ export default function ServiceRequests() {
   const decide = async (id: number, decision: 'accept' | 'reject') => {
     try {
       setBusyId(id);
-      if (decision === 'accept') await acceptServiceRequest(id);
-      else await rejectServiceRequest(id);
-      setReceived((current) => current.map((item) => item.id === id ? { ...item, status: decision === 'accept' ? 'accepted' : 'rejected' } : item));
-    } catch {
-      setError(isEnglish ? 'The request could not be updated.' : 'تعذر تحديث حالة الطلب');
+      if (decision === 'accept') {
+        const response = await acceptServiceRequest(id);
+        const rejectedIds = new Set(response.rejected_request_ids);
+        setReceived((current) => current.map((item) => {
+          if (item.id === id) return { ...item, status: 'accepted' };
+          if (rejectedIds.has(item.id)) return { ...item, status: 'rejected' };
+          return item;
+        }));
+      } else {
+        await rejectServiceRequest(id);
+        setReceived((current) => current.map((item) => item.id === id ? { ...item, status: 'rejected' } : item));
+      }
+    } catch (requestError) {
+      const validationMessage = Object.values(getValidationErrors(requestError)).flat()[0];
+      setError(
+        validationMessage ||
+          getApiErrorMessage(requestError) ||
+          (isEnglish ? 'The request could not be updated.' : 'تعذر تحديث حالة الطلب'),
+      );
     } finally {
       setBusyId(null);
     }

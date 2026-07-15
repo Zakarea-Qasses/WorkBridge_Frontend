@@ -1,6 +1,6 @@
 import { apiRequest } from '@/app/api/client';
 
-import type { Service, ServiceRequest, PaginatedResponse, Conversation } from '../../types';
+import type { Service, ServiceRequest, PaginatedResponse, Conversation, Contract } from '../../types';
 
 export type { ServiceRequest } from '../../types';
 
@@ -9,7 +9,12 @@ function unwrapList<T>(value: T[] | PaginatedResponse<T>) {
 }
 
 export function acceptServiceRequest(id: string | number) {
-  return apiRequest(`/service-requests/${id}/accept`, { method: 'POST' });
+  return apiRequest<{
+    message: string;
+    service_request: ServiceRequest;
+    contract: Contract;
+    rejected_request_ids: number[];
+  }>(`/service-requests/${id}/accept`, { method: 'POST' });
 }
 
 export async function getMyServiceRequests() {

@@ -61,7 +61,7 @@ function statusLabel(status: string, isEnglish: boolean) {
     approved: ['Approved', 'مقبول'],
   };
 
-  return labels[status]?.[isEnglish ? 0 : 1] || status.replaceAll('_', ' ');
+  return labels[status]?.[isEnglish ? 0 : 1] || status.replace(/_/g, ' ');
 }
 
 function activityTypeLabel(type: string, isEnglish: boolean) {
@@ -72,7 +72,7 @@ function activityTypeLabel(type: string, isEnglish: boolean) {
     wallet_request_withdraw: ['Withdrawal request', 'طلب سحب'],
   };
 
-  return labels[type]?.[isEnglish ? 0 : 1] || type.replaceAll('_', ' ');
+  return labels[type]?.[isEnglish ? 0 : 1] || type.replace(/_/g, ' ');
 }
 
 function StatCard({
