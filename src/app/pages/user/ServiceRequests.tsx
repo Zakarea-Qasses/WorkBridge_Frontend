@@ -73,13 +73,10 @@ export default function ServiceRequests() {
     try {
       setBusyId(id);
       if (decision === 'accept') {
-        const response = await acceptServiceRequest(id);
-        const rejectedIds = new Set(response.rejected_request_ids);
-        setReceived((current) => current.map((item) => {
-          if (item.id === id) return { ...item, status: 'accepted' };
-          if (rejectedIds.has(item.id)) return { ...item, status: 'rejected' };
-          return item;
-        }));
+        await acceptServiceRequest(id);
+        setReceived((current) => current.map((item) =>
+          item.id === id ? { ...item, status: 'accepted' } : item,
+        ));
       } else {
         await rejectServiceRequest(id);
         setReceived((current) => current.map((item) => item.id === id ? { ...item, status: 'rejected' } : item));

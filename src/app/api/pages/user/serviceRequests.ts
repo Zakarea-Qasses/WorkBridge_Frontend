@@ -13,7 +13,6 @@ export function acceptServiceRequest(id: string | number) {
     message: string;
     service_request: ServiceRequest;
     contract: Contract;
-    rejected_request_ids: number[];
   }>(`/service-requests/${id}/accept`, { method: 'POST' });
 }
 
